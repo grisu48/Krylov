@@ -1,0 +1,7 @@
+*.o
+*~
+bicgstab_cl
+.cproject
+.project
+matrix_cl
+
