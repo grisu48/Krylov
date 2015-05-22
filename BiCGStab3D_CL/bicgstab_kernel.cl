@@ -14,7 +14,18 @@
 #define size_t unsigned long
 
 // Range check for the matrix index. Turn off in productive code to increase performance, especially on GPU!
-#define RANGE_CHECK
+#define RANGE_CHECK 0
+// Fakes the generation of AX [TEMPORARY USE ONLY]
+#define FAKE_GENERATE_AX 0
+
+
+
+/******************************************************************************
+ * Important notes on the kernel:                                             *
+ * Keep in mind, that the matrix has one ghost cell in each dimension!        *
+ * It means that most operations need also an index shift of 1.               *
+ ******************************************************************************
+ */
 
 
 
@@ -22,7 +33,7 @@
 // Index of a matrix element. (x,y,z) are the desired coodrinates,
 // mx is the size of the matrix
 inline int matrix_index(int x, int y, int z, size_t mx, size_t my, size_t mz) {
-#ifdef RANGE_CHECK
+#if RANGE_CHECK == 1
 	if(x < 0 || x >= mx) printf("ASSERTION FAILED: (x>0 && x<=mx)");
 	if(y < 0 || y >= my) printf("ASSERTION FAILED: (y>0 && y<=my)");
 	if(z < 0 || z >= mz) printf("ASSERTION FAILED: (z>0 && z<=mz)");
@@ -40,7 +51,7 @@ __kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz) {
 	
 	
 	// Divergence in x and z direction :-(
-	bool _isBoundary = (x == 0 || y == 0 || z == 0) || (x >= mx || y >= my || z >= mz);
+	bool _isBoundary = (x <= 0 || y <= 0 || z <= 0) || (x >= mx || y >= my || z >= mz);
 	if(_isBoundary) {
 		matrix[matrix_index(x,y,z,mx,my,mz)] = 0.0;
 	}
@@ -49,6 +60,9 @@ __kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz) {
 
 
 __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __global REAL* Dxx, __global REAL* Dyy, __global REAL* Dzz, __global REAL* Dxy, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ) {
+#if FAKE_GENERATE_AX == 1
+	return;
+#endif
 	const int x = get_global_id(0)+1;
 	const int y = get_global_id(1)+1;
 	const int z = get_global_id(2)+1;
@@ -89,6 +103,9 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 }
 
 __kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ) {
+#if FAKE_GENERATE_AX == 1
+	return;
+#endif
 	const int x = get_global_id(0)+1;
 	const int y = get_global_id(1)+1;
 	const int z = get_global_id(2)+1;

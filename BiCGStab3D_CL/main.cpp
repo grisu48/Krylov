@@ -50,6 +50,8 @@ static double tolerance = 1e-9;
 static void printHelp(string programName = "bicgstab_cl");
 static void sig_handler(int);
 
+/** Check given matrix for illegal values */
+static bool checkMatrix(NumMatrix<double,3>&);
 
 /* ==== MAIN PROGRAM FUNCTION ============================================== */
 
@@ -183,6 +185,24 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
+	/* Pre-run test to check if any illegal values are in the matrices */
+	try {
+		if(!checkMatrix(phi)) throw "Matrix phi";
+		if(!checkMatrix(phi_exact)) throw "Matrix phi_exact";
+		if(!checkMatrix(diffTens[0])) throw "Matrix diffTens[0]";
+		if(!checkMatrix(diffTens[1])) throw "Matrix diffTens[1]";
+		if(!checkMatrix(diffTens[2])) throw "Matrix diffTens[2]";
+		if(!checkMatrix(diffTens[3])) throw "Matrix diffTens[3]";
+		if(!checkMatrix(lambda)) throw "Matrix lambda";
+		if(!checkMatrix(rhs)) throw "Matrix rhs";
+
+		cout << "  Pre-run checks completed." << endl;
+
+	} catch (const char* msg) {
+		cerr << "Pre-run check of the matrices failed: " << msg << endl;
+		exit(5);
+	}
+
 	/* ==== Initialisation of the linear solver ============================ */
 	VERBOSE("  Setting up solver ... ");
 	try {
@@ -282,4 +302,26 @@ static void sig_handler(int sig_no) {
 		exit(EXIT_FAILURE);
 		return;
 	}
+}
+
+
+static bool checkMatrix(NumMatrix<double,3> &matrix) {
+	// Matrix range
+	int mx[3][2];
+	for(int i=0;i<3;i++) {
+		mx[i][0] = matrix.getLow(i);
+		mx[i][1] = matrix.getHigh(i);
+	}
+
+	for(int iz = mx[2][0]; iz <= mx[2][1]; ++iz) {
+		for(int iy = mx[1][0]; iy <= mx[1][1]; ++iy) {
+			for(int ix = mx[0][0]; ix <= mx[0][1]; ++ix) {
+				const double value = matrix(ix,iy,iz);
+
+				if (::isnan(value) || ::isinf(value)) return false;
+			}
+		}
+	}
+
+	return true;
 }

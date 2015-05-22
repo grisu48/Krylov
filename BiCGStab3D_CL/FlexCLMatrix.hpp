@@ -149,6 +149,9 @@ protected:
 	/** OpenCL context */
 	flexCL::Context* _context;
 
+	/** Name of the matrix (mostly used for debugging purposes) */
+	std::string _name;
+
 	/** Local memory size */
 	size_t _localMemSize;
 	/** Maximum work group size */
@@ -223,10 +226,11 @@ public:
 	bool isInitialized(void) { return this->_status == _FLEXCL_MATRIX_STATUS_READY_; }
 	size_t localMemorySize(void) { return this->_localMemSize; }
 	void setLocalMemorySize(size_t size) { this->_localMemSize = size; }
+	void setName(std::string name) { this->_name = name; }
 
 	cl_mem& clMem(void) { return this->_mem; }
 	Context* clContext(void) { return this->_context; }
-
+	std::string name() { return this->_name; }
 
 
 	/** Transfers the given pointer to the OpenCL device */
@@ -238,6 +242,8 @@ public:
 	virtual size_t size() = 0;
 	/** Total size of the matrix including RIM cells */
 	virtual size_t sizeTotal() = 0;
+
+
 };
 
 

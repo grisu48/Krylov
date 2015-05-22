@@ -18,25 +18,35 @@
 /* ==== USER CONFIGURATION SECTION ==== */
 
 // Perform additional checks to verify the stability of the code
+#ifndef _FLEXCL_ADDITIONAL_CHECKS
 #define _FLEXCL_ADDITIONAL_CHECKS 1
+#endif
 // Assumed local size, if the device query fails
+#ifndef _FLEXCL_ASSUMED_LOCALMEM_
 #define _FLEXCL_ASSUMED_LOCALMEM_ 16*1024L
-
+#endif
 
 // Enable profiling (low-level)
+#ifndef _FLEXCL_MATRIX_PROFILING_
 #define _FLEXCL_MATRIX_PROFILING_ 0
+#endif
 
 /* ==== STATIC CONFIGURATION ==== */
 
+#ifndef _FLEXCL_MATRIX_KERNEL_FILENAME
 #define _FLEXCL_MATRIX_KERNEL_FILENAME "flex_matrix.cl"
+#endif
 
 // Tolerance for numeric comparisons
+#ifndef _FLEXCL_MATRIX_NUMERIC_TOLERANCE_
 #define _FLEXCL_MATRIX_NUMERIC_TOLERANCE_ 1e-6
+#endif
 
 /* Deep numeric comparison (compares also infinity and nan values) */
 // Switch this on if you need this comparisons, disable to increase performance
+#ifndef _FLEXCL_MATRIX_NUMERIC_DEEP_COMPARISON
 #define _FLEXCL_MATRIX_NUMERIC_DEEP_COMPARISON 0
-
+#endif
 
 
 
@@ -46,7 +56,9 @@
 /* ==== ADDITIONAL SETUP ==== */
 
 // Use plain array operations to increase performance
+#ifndef _FLEXCL_MATRIX_ARRAY_OPERATIONS
 #define _FLEXCL_MATRIX_ARRAY_OPERATIONS 1
+#endif
 
 #if _FLEXCL_MATRIX_PROFILING_ == 1
 #include "time_ms.h"
@@ -150,17 +162,22 @@ bool Matrix3d::equals(Matrix3d* matrix, bool includeRim) {
 bool Matrix3d::hasNanValues(bool includeRim) {
 	if(includeRim) {
 		size_t _size = this->sizeTotal();
-		for(size_t i=0;i<_size;i++)
-			if(::isnan(this->data[i])) return true;
+		for(size_t i=0;i<_size;i++) {
+			const double value = this->data[i];
+			if(::isnan(value))
+				return true;
+		}
 	} else {
 		for(size_t ix=0;ix<_mx[0];ix++)
 			for(size_t iy=0;iy<_mx[1];iy++)
 				for(size_t iz=0;iz<_mx[2];iz++) {
 					const int i = this->index(ix,iy,iz);
-					if(::isnan(this->data[i])) return true;
+					const double value = this->data[i];
+					if(::isnan(value))
+						return true;
 				}
 	}
-	return true;
+	return false;
 }
 
 size_t Matrix3d::compare(Matrix3d* matrix, bool includeRim) {
@@ -404,7 +421,8 @@ void Matrix3d::printDifferences(Matrix3d* matrix, std::ostream &out, bool includ
 }
 
 CLMatrix3d* Matrix3d::transferToDevice(Context *context) {
-	CLMatrix3d *result = new CLMatrix3d(context, this->_mx[0], this->_mx[1], this->_mx[2], this->data, _rim);
+	CLMatrix3d *result = new CLMatrix3d(context, this->_mx[0], this->_mx[1], this->_mx[2], this->data, this->_rim);
+	result->setName(this->_name);
 	result->initializeContext();
 	return result;
 }

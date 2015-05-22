@@ -22,9 +22,14 @@ using namespace flexCL;
 /* Kernel filename */
 #define KERNEL_FILENAME "bicgstab_kernel.cl"
 
+// Verbose output
+#ifndef VERBOSE
 #define VERBOSE 1
+#endif
+// Profiling mode o
+#ifndef PROFILING
 #define PROFILING 1
-
+#endif
 
 
 
@@ -86,14 +91,16 @@ void BiCGStabSolver::setupContext(void) {
 	this->_context->createProfilingCommandQueue();
 #endif
 
-	const size_t mx = (size_t)this->mx[0];
-	const size_t my = (size_t)this->mx[1];
-	const size_t mz = (size_t)this->mx[2];
+	const size_t mx = (size_t)this->mx[0]+2;
+	const size_t my = (size_t)this->mx[1]+2;
+	const size_t mz = (size_t)this->mx[2]+2;
 
 	this->_matrix_rhs = new CLMatrix3d(this->_context, mx,my,mz);
 	this->_matrix_rhs->initializeContext();
+	this->_matrix_rhs->clear();
 	this->_matrix_lambda = new CLMatrix3d(this->_context, mx,my,mz);
 	this->_matrix_lambda->initializeContext();
+	this->_matrix_lambda->clear();
 
 	this->_matrix_residuals = new CLMatrix3d*[this->lValue+1];
 	this->_uMat = new CLMatrix3d*[this->lValue+1];
@@ -174,35 +181,49 @@ void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 
 /** Transfers the given NumMatrix to the given OpenCL context */
 static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix, CLMatrix3d *copyContextFrom, size_t* size) {
+	const ssize_t rim = 1;		// Number of ghost cells
 	size_t _size[3] = { size[0], size[1], size[2] };
 
-	// +2 because we want 1 ghost cell in each dimension
-	Matrix3d temp(_size[0]+2, _size[1]+2, _size[2]+2);
+	// +2 because we want at least 1 ghost cell in each dimension
+	Matrix3d temp(_size[0]+2*rim, _size[1]+2*rim, _size[2]+2*rim);
 	temp.clear();
 
 
-	for(size_t ix=0; ix<size[0]; ix++)
-		for(size_t iy=0; iy<size[0]; iy++)
-			for(size_t iz=0; iz<size[0]; iz++)
-				temp(ix+1,iy+1,iz+1) = matrix(ix,iy,iz);
+	for(size_t ix=0; ix<(size[0]); ix++)
+		for(size_t iy=0; iy<(size[0]); iy++)
+			for(size_t iz=0; iz<(size[0]); iz++) {
+				const double value = matrix(ix,iy,iz);
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+				if(::isnan(value) || ::isinf(value))
+					cerr << "transferMatrix - NAN or INF value at " << ix << "," << iy << "," << iz << endl;
+#endif
+				temp(ix+1,iy+1,iz+1) = value;
+			}
 
 
 
 
 	CLMatrix3d* result = temp.transferToDevice(context);
-	//result->initializeContext();
 	return result;
 }
 
 void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
 	size_t size[3] = {matrix->mx(0),matrix->mx(1), matrix->mx(2)};
+	const size_t rim = matrix->rim();
 
 	this->_clKernelBoundary->setArgument(0, matrix->clMem());
-	this->_clKernelBoundary->setArgument(1, size[0]+2);
-	this->_clKernelBoundary->setArgument(2, size[0]+2);
-	this->_clKernelBoundary->setArgument(3, size[0]+2);
-	this->_clKernelBoundary->enqueueNDRange(size[0]+2, size[1]+2, size[2]+2);
+	this->_clKernelBoundary->setArgument(1, size[0]+rim);
+	this->_clKernelBoundary->setArgument(2, size[0]+rim);
+	this->_clKernelBoundary->setArgument(3, size[0]+rim);
+	cerr << "applyBoundary ... "; cerr.flush();
+	this->_clKernelBoundary->enqueueNDRange(size[0]+2*rim, size[1]+2*rim, size[2]+2*rim);
+	this->_context->join();
+	cerr << "done" << endl; cerr.flush();
 
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	this->_context->join();
+	if(!this->checkMatrix(matrix)) throw "applyBoundary produces illegal values";
+#endif
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
@@ -229,6 +250,10 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	const unsigned long runtime_ms = this->_clKernelGenerateAx_Full->runtime() * 1e-6;
 	cerr << "generateAx -- " << runtime_ms << " ms" << endl;
 #endif
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	this->_context->join();
+	if(!this->checkMatrix(dst)) throw "generateAx_Full produces illegal values in dst";
+#endif
 
 	applyBoundary(dst);
 }
@@ -246,12 +271,17 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_clKernelGenerateAx_NoSpatial->setArgument(7, this->deltaX[1]);
 	this->_clKernelGenerateAx_NoSpatial->setArgument(8, this->deltaX[2]);
 
+	// When enqueueing use only mx without ghost cells!
 	this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
 
 #if PROFILING == 1
 	this->_context->join();
 	const unsigned long runtime_ms = this->_clKernelGenerateAx_NoSpatial->runtime() * 1e-6;
 	cerr << "PROFILING: generateAx -- " << runtime_ms << " ms" << endl;
+#endif
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	this->_context->join();
+	if(!this->checkMatrix(dst)) throw "generateAx_NoSpatial produces illegal values in dst";
 #endif
 
 	applyBoundary(dst);
@@ -283,13 +313,38 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 }
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda) {
+#if PROFILING == 1
+	unsigned long runtime = 0L;
+#endif
+
 	this->generateAx(phi, residual, lambda);
+#if PROFILING == 1
+	runtime += _clKernelGenerateAx_NoSpatial->runtime();
+#endif
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	if(!checkMatrix(phi))       throw "generateAx(generateAx) - checkMatrix(phi) failed";
+	if(!checkMatrix(residual))  throw "generateAx(generateAx) - checkMatrix(residual) failed";
+	if(!checkMatrix(lambda))    throw "generateAx(generateAx) - checkMatrix(lambda) failed";
+#endif
+
 	residual->add(rhs);
+#if PROFILING == 1
+	runtime += residual->lastKernelRuntime();
+#endif
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	if(!checkMatrix(residual))  throw "generateAx(residual->add) - checkMatrix(residual) failed";
+#endif
 	applyBoundary(residual);
+#if PROFILING == 1
+	runtime += this->_clKernelBoundary->runtime();
+#endif
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	if(!checkMatrix(residual))  throw "generateAx(applyBoundary) - checkMatrix(residual) failed";
+#endif
 
 #if PROFILING == 1
 	this->_context->join();
-	cerr << "PROFILING: calculated Residual" << endl;
+	cerr << "PROFILING: calculated Residual (" << (runtime*1e-6) << " ms)" << endl;
 #endif
 }
 
@@ -355,7 +410,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 		// Mathematical variables
 		double rho0 = 1.0;
-		double rho1 = 1.0;;
+		double rho1 = 1.0;
 		double alpha = 0.0;
 		double omega = 1.0;
 		double norm = 0.0;
@@ -374,6 +429,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 		if(!this->checkMatrix(this->_matrix_residuals[0])) throw "matrix_residual check 0 failed";
 #endif
+
+		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
 		do {
 			iterations++;
@@ -409,7 +466,10 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda);
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
-		if(!this->checkMatrix(this->_uMat[jj+1])) throw "_uMat check 3 failed";
+				if(!this->checkMatrix(this->_uMat[jj+1])) throw "_uMat check 3 failed";
+				if(!this->checkMatrix(cl_resTilde)) throw "cl_resTilde check 3.1 failed";
+				double dotProduct = _uMat[jj+1]->dotProduct(cl_resTilde);
+				if(::isnan(dotProduct) || ::isinf(dotProduct)) throw "dotProduct check 3.1 failed";
 #endif
 
 				alpha = rho0/(_uMat[jj+1]->dotProduct(cl_resTilde));
@@ -417,7 +477,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				for(int ii=0; ii<=jj; ++ii) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
-		if(!this->checkMatrix(this->_matrix_residuals[ii])) throw "matrix_residual check 4 failed";
+					if(!this->checkMatrix(this->_matrix_residuals[ii])) throw "matrix_residual check 4 failed";
 #endif
 				}
 
@@ -492,7 +552,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		} while(norm > tolerance*normRhs);
 
 		cout << "Completed after " << iterations << " iterations" << endl;
-
 
 
 	} catch (...) {
