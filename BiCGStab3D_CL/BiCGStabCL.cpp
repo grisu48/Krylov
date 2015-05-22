@@ -417,7 +417,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 		double tau[lValue+1][lValue+1];
 		double sigma[lValue+1], gammap[lValue+1], gammapp[lValue+1];
-		double gamma[lValue+1];
+		double _gamma[lValue+1];
 
 		// Calculate r_0
 
@@ -439,7 +439,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			rho0 *= -omega;
 
 			// ==== BI-CG PART ============================================= //
-			cout << "BI-CG part of the solver ... " << endl;
+			// cout << "BI-CG part of the solver ... " << endl;
 
 			for(int jj=0; jj<lValue; ++jj) {
 
@@ -447,11 +447,11 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
-				//rho1 = dot_product(residuals[jj], resTilde);
-				double beta = alpha*rho1/rho0;
+				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
 
 				for(int ii=0; ii<=jj; ++ii) {
+					// XXX: Performance: Replace with add mul
 					_uMat[ii]->mul(-beta);
 					_uMat[ii]->add(_matrix_residuals[ii]);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -472,9 +472,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				if(::isnan(dotProduct) || ::isinf(dotProduct)) throw "dotProduct check 3.1 failed";
 #endif
 
-				alpha = rho0/(_uMat[jj+1]->dotProduct(cl_resTilde));
+				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
 
-				for(int ii=0; ii<=jj; ++ii) {
+				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 					if(!this->checkMatrix(this->_matrix_residuals[ii])) throw "matrix_residual check 4 failed";
@@ -500,7 +500,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 
 			// ==== MR PART ================================================ //
-			cout << "MR part of the solver ... " << endl;
+			// cout << "MR part of the solver ... " << endl;
 			for(int jj=1; jj<=lValue; ++jj) {
 				for(int ii=1; ii<jj; ++ii) {
 					tau[ii][jj] = _matrix_residuals[jj]->dotProduct(_matrix_residuals[ii]) / sigma[ii];
@@ -508,35 +508,36 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				}
 
 
-				sigma[jj] = _matrix_residuals[jj]->dotProduct(_matrix_residuals[jj]);
+				sigma[jj] = _matrix_residuals[jj]->dotProduct();
 				gammap[jj] = _matrix_residuals[0]->dotProduct(_matrix_residuals[jj])/sigma[jj];
 			}
 
-			omega = gamma[lValue] = gammap[lValue];
+			_gamma[lValue] = gammap[lValue];
+			omega = _gamma[lValue];
 			cout << omega << endl;
 
 			for(int jj=lValue-1; jj>=1; --jj) {
-				gamma[jj] = gammap[jj];
+				_gamma[jj] = gammap[jj];
 				for(int ii=jj+1; ii<=lValue; ++ii) {
-					gamma[jj] -= tau[jj][ii]*gamma[ii];
+					_gamma[jj] -= tau[jj][ii]*_gamma[ii];
 				}
 			}
 
 			for(int jj=1; jj<lValue; ++jj) {
-				gammapp[jj] = gamma[jj+1];
+				gammapp[jj] = _gamma[jj+1];
 				for(int ii=jj+1; ii<lValue; ++ii) {
-					gammapp[jj] += tau[jj][ii]*gamma[ii+1];
+					gammapp[jj] += tau[jj][ii]*_gamma[ii+1];
 				}
 			}
 
 
 			// Check break conditions:
-			cl_phi->addMultiplied(_matrix_residuals[0], gamma[1]);
+			cl_phi->addMultiplied(_matrix_residuals[0], _gamma[1]);
 			_matrix_residuals[0]->subMultiplied(_matrix_residuals[lValue], gammap[lValue]);
-			_uMat[0]->subMultiplied(_uMat[lValue], gamma[lValue]);
+			_uMat[0]->subMultiplied(_uMat[lValue], _gamma[lValue]);
 
 			for(int jj=1; jj<lValue; ++jj) {
-				_uMat[0]->subMultiplied(_uMat[jj],gamma[jj]);
+				_uMat[0]->subMultiplied(_uMat[jj],_gamma[jj]);
 				cl_phi->addMultiplied(_matrix_residuals[jj],gammapp[jj]);
 				_matrix_residuals[0]->subMultiplied(_matrix_residuals[jj],gammap[jj]);
 			}
