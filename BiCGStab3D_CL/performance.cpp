@@ -321,6 +321,7 @@ int main(int argc, char** argv) {
 
 	cout << SEPARATOR;
 	cout << "  --------RESULTS--------" << endl;
+	cout << "                          :   PROFILE  | WALL CLOCK " << endl;
 	double index[2];
 	index[0] = 0.0;
 	index[1] = ((double)transfer_time / (double)(size*size*size))*1e5;
@@ -336,12 +337,13 @@ int main(int argc, char** argv) {
 	cout << "    Multiplication        : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	index[0] = (double)dot_product_itself_time[0]/(double)iterations;
 	index[1] = (double)dot_product_itself_time[1]/(double)iterations;
+	cout << "  -- Performance indices -- " << endl;
 	cout << "    dotProduct (itself)   : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	index[0] = (double)dot_product_foreign_time[0]/(double)iterations;
 	index[1] = (double)dot_product_foreign_time[1]/(double)iterations;
 	cout << "    dotProduct (foreign)  : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	cout << "    dotProduct (vanilla)  : " << setw(10) << dot_product_time << " | " << setw(10) << ((double)dot_product_time/(double)iterations) << endl;
-	cout << "    -- lower index means better result -- " << endl;
+	cout << "  -- lower index means better result -- " << endl;
 	cout << SEPARATOR;
 
 
