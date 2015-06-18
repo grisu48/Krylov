@@ -97,11 +97,53 @@ __kernel void reduction_local( __global const REAL *dA, __local REAL *prods, siz
 }
 
 
+
+/** Maximum Reduction on a double-buffered local array set.
+ * */
+__kernel void reduction_local_max( __global const REAL *dA, __local REAL *prods, size_t size, size_t offset, __global REAL *dest ) {
+#if VERBOSE == 1
+	printf("KERNEL::Reduction_local_max\n");
+#endif
+	const int gid = get_global_id( 0 );		// Global ID of the array
+	const int tnum = get_local_id( 0 ); 		// Local thread number
+	const int wgNum = get_group_id( 0 ); 		// Work-group number
+	const int numItems = get_local_size(0);
+	
+	
+	if(gid >= size)
+		prods[tnum] = 0.0;
+	else
+		prods[tnum] = dA[gid+offset];
+	
+	for(int offset = 1; offset< numItems; offset *=2 )
+	{
+		const int mask = 2*offset -1;
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if((tnum&mask)==0)
+			prods[tnum] = max(prods[tnum], prods[tnum + offset]);
+	}
+	
+	// Done
+	barrier(CLK_LOCAL_MEM_FENCE);
+	if(tnum ==0)
+		dest[wgNum] = prods[0];
+	
+#if VERBOSE == 1
+	printf("KERNEL::Reduction_local_max completed\n");
+#endif
+}
+
+
 /* ==== Array operations ================================================================ */
 
 __kernel void array_set(__global REAL* array, size_t offset, double value) {
 	const int gid = get_global_id(0);
 	array[gid + offset] = value;
+}
+
+__kernel void array_abs(__global REAL* array, size_t offset) {
+	const int gid = get_global_id(0);
+	array[gid + offset] = fabs(array[gid + offset]);
 }
 
 __kernel void array_add(__global REAL* a1, REAL value, __global REAL* dst, size_t size) {

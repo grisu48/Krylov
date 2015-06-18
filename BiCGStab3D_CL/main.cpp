@@ -1,15 +1,15 @@
 
 /* =============================================================================
- * 
+ *
  * Title:         BiCGStab 3d OpenCL accelerated
  * Author:        Felix Niederwanger
  * Description:   Example and test program for the BiCGStab 3D linear solver
  *                using OpenCL acceleration
  * =============================================================================
  */
- 
- 
- 
+
+
+
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -133,6 +133,7 @@ int main(int argc, char** argv) {
 	NumMatrix<double,3> lambda;
 	NumMatrix<double,3> diffTens[4];
 	NumArray<double> diff(3);
+	// 1 ghost cell in each direction
 	phi.resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	phi_exact.resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	rhs.resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
@@ -249,11 +250,23 @@ int main(int argc, char** argv) {
 		cout << " l2 error: " << l2err << "  (" << error << "/" << num << ")" << endl;
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
-		// Just exit, I am lazy (missing cleanup)
+		DELETE(solver);
+		DELETE(oclContext);
+		return EXIT_FAILURE;
+	} catch (NumException &e) {
+		cerr << "Numerical exception occurred: " << e.what() << endl;
+		DELETE(solver);
+		DELETE(oclContext);
 		return EXIT_FAILURE;
 	} catch (const char *msg) {
 		cerr << "Exception thrown: " << msg << endl;
-		// Just exit, I am lazy (missing cleanup)
+		DELETE(solver);
+		DELETE(oclContext);
+		return EXIT_FAILURE;
+	} catch (...) {
+		cerr << "Unknown exception thrown." << endl;
+		DELETE(solver);
+		DELETE(oclContext);
 		return EXIT_FAILURE;
 	}
 	cout << "=======================================================" << endl << endl;

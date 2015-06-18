@@ -373,6 +373,52 @@ int main(int argc, char** argv) {
 				cout << "  Delta value = " << (delta_relative*100.0) << "% (below tolerance) : OK" << endl;
 		}
 
+		// Norms
+		cout << "Norms" << endl;
+		m2->transferToDevice(matrix.raw());
+		context->join();
+		double l2norm = 0.0;
+		double maxnorm = 0.0;
+		time = -time_ms();
+		l2norm = m2->l2Norm();
+		maxnorm = m2->maxNorm();
+		context->join();
+		time += time_ms();
+		cout << "  Returned results: l2 = " << l2norm << ", max = " << maxnorm << " (within " << time << " ms)" << endl;
+		if(::isnan(l2norm) || ::isnan(maxnorm)) {
+			cout.flush();
+			cerr << "Returned norm is NAN" << endl;
+			cerr.flush();
+			return EXIT_FAILURE;
+		} else {
+			time = -time_ms();
+			double l2norm_cpu = matrix.l2Norm();
+			double maxNorm_cpu = matrix.maxNorm();
+			time += time_ms();
+
+			cout << "  Returned results: l2 = " << l2norm_cpu << ", max = " << maxNorm_cpu << " (within " << time << " ms)" << endl;
+
+			double delta = fabs(maxnorm - maxNorm_cpu);
+			double delta_relative = fabs(delta/::max(maxnorm, maxNorm_cpu));
+			if(delta_relative > 1e-5) {
+				cerr << "  ERROR: MaxNorm delta > 0.001% (Delta = " << (delta_relative*100.0) << "%)" << endl;
+				cerr << "Initial tests failed." << endl;
+				// Lazy exit
+				exit(EXIT_FAILURE);
+			}
+
+			delta = fabs(l2norm - l2norm_cpu);
+			delta_relative = fabs(delta/::max(l2norm, l2norm_cpu));
+			if(delta_relative > 1e-5) {
+				cerr << "  ERROR: L2 delta > 0.001% (Delta = " << (delta_relative*100.0) << "%)" << endl;
+				cerr << "Initial tests failed." << endl;
+				// Lazy exit
+				exit(EXIT_FAILURE);
+			}
+		}
+
+
+
 
 		// Now the testing begins
 		signal(SIGINT, sig_handler);

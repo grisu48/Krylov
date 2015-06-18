@@ -180,6 +180,27 @@ bool Matrix3d::hasNanValues(bool includeRim) {
 	return false;
 }
 
+bool Matrix3d::isNull(bool includeRim) {
+	if(includeRim) {
+		size_t _size = this->sizeTotal();
+		for(size_t i=0;i<_size;i++) {
+			const double value = this->data[i];
+			if(value != 0)
+				return false;
+		}
+	} else {
+		for(size_t ix=0;ix<_mx[0];ix++)
+			for(size_t iy=0;iy<_mx[1];iy++)
+				for(size_t iz=0;iz<_mx[2];iz++) {
+					const int i = this->index(ix,iy,iz);
+					const double value = this->data[i];
+					if(value != 0)
+						return false;
+				}
+	}
+	return true;
+}
+
 size_t Matrix3d::compare(Matrix3d* matrix, bool includeRim) {
 #if _FLEXCL_ADDITIONAL_CHECKS == 1 || _FLEXCL_MATRIX_BOUNDS_CHECK == 1
 	this->boundsCheck(matrix);
@@ -374,6 +395,29 @@ double Matrix3d::dotProduct(Matrix3d *matrix, bool includeRim) {
 	return result;
 }
 
+double Matrix3d::maxNorm(bool includeRim) {
+	double result = 0.0;
+	if(includeRim) {
+		size_t size = this->sizeTotal();
+		for(size_t i=0;i<size;i++)
+			result = ::max(result, this->data[i]);
+	} else {
+		for(size_t ix=0;ix<_mx[0];ix++)
+			for(size_t iy=0;iy<_mx[1];iy++)
+				for(size_t iz=0;iz<_mx[2];iz++) {
+					const int i = this->index(ix,iy,iz);
+					result = ::max(result, this->data[i]);
+				}
+	}
+
+	return result;
+}
+
+double Matrix3d::l2Norm(bool includeRim) {
+	const double dotProd = this->dotProduct(this);
+	return sqrt(dotProd);
+}
+
 void Matrix3d::clear(void) {
 	size_t n = this->sizeTotal();
 	for(size_t i=0;i<n;i++) data[i] = 0;
@@ -467,8 +511,10 @@ void CLMatrix_d::initializeContext() {
 	this->_program = this->_context->createProgramFromSourceFile(_FLEXCL_MATRIX_KERNEL_FILENAME);
 	// Load kernels
 	this->_kern_Reduction_Local = this->_program->createKernel("reduction_local");
-	this->_kern_ArraySet = this->_program->createKernel("array_set");
+	this->_kern_Reduction_Local_max = this->_program->createKernel("reduction_local_max");
 
+	this->_kern_ArraySet = this->_program->createKernel("array_set");
+	this->_kern_ArrayAbs = this->_program->createKernel("array_abs");
 	this->_kern_ArrayAdd = this->_program->createKernel("array_add");
 	this->_kern_ArraySub = this->_program->createKernel("array_sub");
 	this->_kern_ArrayMul = this->_program->createKernel("array_mul");
@@ -518,6 +564,13 @@ void CLMatrix_d::clArraySet(cl_mem array, size_t size, size_t offset, double val
 	this->_kern_ArraySet->setArgument(2, value);
 	this->_kern_ArraySet->enqueueNDRange(size);
 }
+
+void CLMatrix_d::clArrayAbs(cl_mem array, size_t size, size_t offset) {
+	this->_kern_ArrayAbs->setArgument(0, array);
+	this->_kern_ArrayAbs->setArgument(1, offset);
+	this->_kern_ArrayAbs->enqueueNDRange(size);
+}
+
 static void array_arithmetic_operation(Kernel* kernel, cl_mem a1, double a2, cl_mem dst, size_t size) {
 	kernel->setArgument(0, a1);
 	kernel->setArgument(1, a2);
@@ -582,20 +635,20 @@ void CLMatrix_d::setConstantValue(double value) {
 	clArraySet(this->_mem, this->sizeTotal(), 0, value);
 }
 
-double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
+static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t maxWorkingGroupSize, size_t localMemorySize, cl_mem buffer, size_t size, size_t offset) {
 #if _FLEXCL_MATRIX_PROFILING_ == 1
 	unsigned long profiling_time = -time_ms();
 #endif
 
 	// The number of computation units should be a multiple of this value to fully utilize the hardware
 	//const size_t computationUnits = this->_kern_Reduction_Local->getPreferredWorkGroupSizeMultiple();
-	const size_t maxWorkGroupSize = ::max(this->_maxWorkGroupSize, this->_kern_Reduction_Local->getKernelWorkGroupSize());
+	const size_t maxWorkGroupSize = ::max(maxWorkingGroupSize, kernel->getKernelWorkGroupSize());
 
 
 	/* Determine the number of working groups and working items by the available local memory and the maximum work group size */
 
 	// Local memory size for double - We must round down to the next integer
-	size_t localMemSize = (size_t)(::floor((double)this->_localMemSize/(double)sizeof(double)) * sizeof(double));
+	size_t localMemSize = (size_t)(::floor((double)localMemorySize/(double)sizeof(double)) * sizeof(double));
 	// Local size is the number of elements per scan block
 	size_t localSize = localMemSize / sizeof(double);
 
@@ -624,20 +677,20 @@ double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
 #endif
 
 	// Result buffer
-	cl_mem result_buf = _context->createBuffer(sizeof(double)*numWorkGroups);
+	cl_mem result_buf = context->createBuffer(sizeof(double)*numWorkGroups);
 
 	try {
 		// Setup kernel
-		_kern_Reduction_Local->setArgument(0, buffer);
-		_kern_Reduction_Local->setArgumentLocalMem(1, localMemSize);
-		_kern_Reduction_Local->setArgument(2, size);
-		_kern_Reduction_Local->setArgument(3, offset);
-		_kern_Reduction_Local->setArgument(4, result_buf);
+		kernel->setArgument(0, buffer);
+		kernel->setArgumentLocalMem(1, localMemSize);
+		kernel->setArgument(2, size);
+		kernel->setArgument(3, offset);
+		kernel->setArgument(4, result_buf);
 		size_t globalWorkSize[1] = { globalSize };
 		size_t localWorkSize[1] = { localSize };
-		_kern_Reduction_Local->enqueueNDRange(1, globalWorkSize, localWorkSize);
+		kernel->enqueueNDRange(1, globalWorkSize, localWorkSize);
 
-		_context->join();
+		context->join();
 
 		// Old relict of performance testing
 #if 0
@@ -656,8 +709,8 @@ double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
 
 		// Result readout, do not forget to release buffer!
 		double *result_buffer = new double[numWorkGroups];
-		_context->readBuffer(result_buf, sizeof(double)*numWorkGroups, result_buffer, true);
-		_context->releaseBuffer(result_buf);
+		context->readBuffer(result_buf, sizeof(double)*numWorkGroups, result_buffer, true);
+		context->releaseBuffer(result_buf);
 		result_buf = NULL;
 
 #if _FLEXCL_MATRIX_PROFILING_ == 1
@@ -679,13 +732,19 @@ double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
 
 	} catch(...) {
 		// Clean exception handling: Release OpenCL buffer
-		if(result_buf != NULL) _context->releaseBuffer(result_buf);
+		if(result_buf != NULL) context->releaseBuffer(result_buf);
 		throw;
 	}
-
 }
 
 
+double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
+	return reduction(_context, this->_kern_Reduction_Local, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset);
+}
+
+double CLMatrix_d::reduction_max_double(cl_mem buffer, size_t size, size_t offset) {
+	return reduction(_context, this->_kern_Reduction_Local_max, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset);
+}
 
 
 
@@ -1172,10 +1231,20 @@ long CLMatrix3d::lastKernelRuntime(void) {
 	else return this->_runtime;
 }
 
-double CLMatrix3d::l2Norm(void) {
-	double squared = this->dotProduct(this);
-	return sqrt(squared);
+double CLMatrix3d::maxNorm(bool includeRim) {
+	// Copy memory
+	size_t size = this->sizeTotal();
+	cl_mem buffer = _context->createBuffer(sizeof(double)*size);
+	_context->copyBuffer(buffer, this->_mem, sizeof(double)*size);
+	clArrayAbs(buffer, size);
+	double result = reduction_max_double(buffer, size);
+	_context->releaseBuffer(buffer);
+	return result;
+}
 
+double CLMatrix3d::l2Norm(void) {
+	const double squared = this->dotProduct(this);
+	return sqrt(squared);
 }
 
 void CLMatrix3d::copyFrom(CLMatrix3d *matrix) {

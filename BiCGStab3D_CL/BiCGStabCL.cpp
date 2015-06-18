@@ -7,7 +7,7 @@
 
 #include "BiCGStabCL.hpp"
 #include <iostream>
-
+#include <iomanip>
 
 
 
@@ -26,20 +26,219 @@ using namespace flexCL;
 #ifndef VERBOSE
 #define VERBOSE 1
 #endif
-// Profiling mode o
+// Profiling mode on or off
 #ifndef PROFILING
 #define PROFILING 1
 #endif
 
+#ifndef TESTING
+#define TESTING 1
+#endif
 
 
+// Delete routine including a NULL check and assignment
 #define DELETE(x) { if(x!=NULL) delete x; x = NULL; }
+// Tolerance for numerical operations
 #define epsilon 1e-3
+// Equal comparison for two floating point values
 #define REAL_EQUAL(x,y) { fabs(x-y)<epsilon*(y/x) }
+// Number of ghost cells
+#define RIM 1
 
 
 using namespace std;
 using namespace flexCL;
+
+
+double dot_product(NumMatrix<double,3> &vecA, NumMatrix<double,3> &vecB) {
+	const int dim = 3;
+
+	//! Compute the scalar product of two quantities
+	int mx[dim];
+	for(int dir=0; dir<dim; ++dir) {
+		mx[dir] = vecA.getHigh(dir)-1;
+	}
+
+	double result=0.;
+
+
+	for(int iz = 1; iz < mx[2]; iz += 1) {
+		for(int iy = 1; iy < mx[1]; iy += 1) {
+			for(int ix = 1; ix < mx[0]; ix += 1) {
+				result += vecA(ix,iy,iz)*vecB(ix,iy,iz);
+			}
+		}
+	}
+
+	// Now add boundary values
+	// at x-boundaries
+	for(int iz = 1; iz < mx[2]; iz += 1) {
+		for(int iy = 1; iy < mx[1]; iy += 1) {
+			result +=  vecA(0,iy,iz)*vecB(0,iy,iz);
+			result +=  vecA(mx[0],iy,iz)*vecB(mx[0],iy,iz);
+		}
+	}
+	// at y-boundaries
+	for(int iz = 1; iz < mx[2]; iz += 1) {
+		for(int ix = 1; ix < mx[0]; ix += 1) {
+			result += vecA(ix,0,iz)*vecB(ix,0,iz);
+			result += vecA(ix,mx[1],iz)*vecB(ix,mx[1],iz);
+		}
+	}
+	// at z-boundaries:
+	for(int iy = 1; iy < mx[1]; iy += 1) {
+		for(int ix = 1; ix < mx[0]; ix += 1) {
+			result += vecA(ix,iy,0)*vecB(ix,iy,0);
+			result += vecA(ix,iy,mx[2])*vecB(ix,iy,mx[2]);
+		}
+	}
+
+	// Now add boundary values with weight
+	for(int iz = 1; iz < mx[2]; iz += 1) {
+		result += vecA(0,0,iz)*vecB(0,0,iz);
+		result += vecA(mx[0],0,iz)*vecB(mx[0],0,iz);
+		result += vecA(0,mx[1],iz)*vecB(0,mx[1],iz);
+		result += vecA(mx[0],mx[1],iz)*vecB(mx[0],mx[1],iz);
+	}
+
+	for(int iy = 1; iy < mx[1]; iy += 1) {
+		result += vecA(0,iy,0)*vecB(0,iy,0);
+		result += vecA(mx[0],iy,0)*vecB(mx[0],iy,0);
+		result += vecA(0,iy,mx[2])*vecB(0,iy,mx[2]);
+		result += vecA(mx[0],iy,mx[2])*vecB(mx[0],iy,mx[2]);
+	}
+
+	for(int ix = 1; ix < mx[0]; ix += 1) {
+		result += vecA(ix,0,0)*vecB(ix,0,0);
+		result += vecA(ix,mx[1],0)*vecB(ix,mx[1],0);
+		result += vecA(ix,0,mx[2])*vecB(ix,0,mx[2]);
+		result += vecA(ix,mx[1],mx[2])*vecB(ix,mx[1],mx[2]);
+	}
+
+	// Finally add boundary values with weight 1/8
+	result += vecA(0,0,0)*vecB(0,0,0);
+	result += vecA(mx[0],0,0)*vecB(mx[0],0,0);
+	result += vecA(0,mx[1],0)*vecB(0,mx[1],0);
+	result += vecA(mx[0],mx[1],0)*vecB(mx[0],mx[1],0);
+	result += vecA(0,0,mx[2])*vecB(0,0,mx[2]);
+	result += vecA(mx[0],0,mx[2])*vecB(mx[0],0,mx[2]);
+	result += vecA(0,mx[1],mx[2])*vecB(0,mx[1],mx[2]);
+	result += vecA(mx[0],mx[1],mx[2])*vecB(mx[0],mx[1],mx[2]);
+	return result;
+}
+
+inline double dot_product(NumMatrix<double,3> &vec) {
+	return dot_product(vec,vec);
+}
+
+/**
+ * Print slice of the matrix as z/2
+ */
+void print(NumMatrix<double,3> &matrix) {
+	ssize_t mx[3];
+	ssize_t low[3];
+	ssize_t high[3];
+	for(int i=0;i<3;i++) {
+		low[i] = matrix.getLow(i);
+		high[i] = matrix.getHigh(i);
+		mx[i] = high[i] - low[i];
+	}
+
+	// Print slice at z/2
+	const int z = mx[2]/2;
+	int row = 0;
+	for(ssize_t x = low[0]; x <= high[0]; x++) {
+		cout << setw(4) << ++row << "|\t";
+		for(ssize_t y = low[1]; y <= high[1]; y++) {
+			cout << '\t' << setw(8) << matrix(x,y,z);
+			//cout << "matrix[" << x << "," << y << "," << z << "] = " << matrix(x,y,z) << endl;
+		}
+
+		cout << endl;
+	}
+}
+
+
+/**
+ * Print slice of the matrix as z/2
+ */
+void print(CLMatrix3d *matrix) {
+	ssize_t mx[3];
+	ssize_t rim = matrix->rim();
+	for(int i=0;i<3;i++) mx[i] = matrix->mx(i);
+	// const size_t rim = matrix->rim();
+
+	Matrix3d *locMatrix = matrix->transferToHost();
+
+	// Print slice at z/2
+	const int z = mx[2]/2;
+	int row = 0;
+	for(ssize_t x = -rim; x < mx[0]+rim ; x++) {
+		cout << setw(4) << ++row << "|\t";
+		for(ssize_t y = -rim; y < mx[1]+rim ; y++) {
+			cout << '\t' << setw(8) << locMatrix->get(x,y,z);
+		}
+		cout << endl;
+	}
+
+	delete locMatrix;
+
+}
+
+/**
+ * Print slice of the matrix as z/2
+ */
+inline void print(CLMatrix3d &matrix) { print(&matrix); }
+
+
+bool compareMatrixSize(NumMatrix<double,3> &matA, NumMatrix<double,3> &matB) {
+	for(int i=0;i<3;i++) {
+		if(matA.getLow(i) != matB.getLow(i)) return false;
+		if(matA.getHigh(i) != matB.getHigh(i)) return false;
+	}
+	return true;
+}
+
+/**
+ * @brief Compare two matrices. If a cell is varying, the method prints an error message to the given ostream instance
+ * @return 0 if the matrices match each other, -1 if the size of the matrices are different or otherwise it returns the number of cells that vary from each other (numerical float comparison)
+ */
+size_t compareMatrices(NumMatrix<double,3> mat1, CLMatrix3d* mat2, ostream &out = cerr) {
+	size_t mx[3];
+	size_t rim = mat2->rim();
+	size_t result = 0;
+
+	for(int i=0;i<3;i++) {
+		mx[i] = (mat1.getHigh(i) - mat1.getLow(i))-2*rim;
+		if(mx[i] != mat2->mx(i)) {
+			out << "compareMatrices - mx[" << i << "] failed (" << mx[i] << " != " << mat2->mx(i) << ")" << endl;
+			return -1;
+		}
+	}
+
+	Matrix3d *matLocal = mat2->transferToHost();
+
+	for(size_t x = 0; x < mx[0]; x++) {
+		for(size_t y = 0; y < mx[1]; y++) {
+			for(size_t z = 0; z < mx[2]; z++) {
+				const double v1 = mat1(x,y,z);
+				const double v2 = matLocal->get(x,y,z);
+				const double delta = fabs(v1-v2);
+				if(delta > epsilon) {
+					out << "compareMatrices[" << x << "," << y << "," << z << "] - " << v1 << " != " << v2 << " (DELTA = " << delta << ")" << endl;
+					result++;
+				}
+
+			}
+		}
+	}
+	out.flush();
+
+	delete matLocal;
+	return result;
+
+
+}
 
 
 BiCGStabSolver::BiCGStabSolver(grid_manager &grid, double tolerance, int lValue, flexCL::Context* context) {
@@ -105,7 +304,7 @@ void BiCGStabSolver::setupContext(void) {
 	this->_matrix_residuals = new CLMatrix3d*[this->lValue+1];
 	this->_uMat = new CLMatrix3d*[this->lValue+1];
 	for(int i=0;i<this->lValue+1;i++) {
-		this->_matrix_residuals[i] = new CLMatrix3d(this->_context, mx,my,mz);
+		this->_matrix_residuals[i] = new CLMatrix3d(this->_context, mx,my,mz, NULL, RIM);
 		this->_uMat[i] = new CLMatrix3d(this->_context, mx,my,mz);
 
 		this->_matrix_residuals[i]->initializeContext();
@@ -180,30 +379,65 @@ void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 
 
 /** Transfers the given NumMatrix to the given OpenCL context */
+
+// XXX: Remove parameter size
 static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix, CLMatrix3d *copyContextFrom, size_t* size) {
-	const ssize_t rim = 1;		// Number of ghost cells
-	size_t _size[3] = { size[0], size[1], size[2] };
+	const ssize_t rim = RIM;		// Number of ghost cells
+	ssize_t _size[3];
+	ssize_t _low[3];
+	ssize_t _high[3];
+
+	for(int i=0;i<3;i++) {
+		_low[i] = matrix.getLow(i);
+		_high[i] = matrix.getHigh(i);
+		_size[i] = _high[i] - _low[i];
+	}
 
 	// +2 because we want at least 1 ghost cell in each dimension
-	Matrix3d temp(_size[0]+2*rim, _size[1]+2*rim, _size[2]+2*rim);
+	//Matrix3d temp(_size[0]+2*rim, _size[1]+2*rim, _size[2]+2*rim);
+	Matrix3d temp(_size[0], _size[1], _size[2], rim);
 	temp.clear();
 
-
-	for(size_t ix=0; ix<(size[0]); ix++)
-		for(size_t iy=0; iy<(size[0]); iy++)
-			for(size_t iz=0; iz<(size[0]); iz++) {
+	// Copy the whole matrix
+	for(ssize_t ix=_low[0]; ix<_high[0]; ix++)
+		for(ssize_t iy=_low[1]; iy<_high[1]; iy++)
+			for(ssize_t iz=_low[2]; iz<_high[2]; iz++) {
 				const double value = matrix(ix,iy,iz);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(::isnan(value) || ::isinf(value))
 					cerr << "transferMatrix - NAN or INF value at " << ix << "," << iy << "," << iz << endl;
 #endif
-				temp(ix+1,iy+1,iz+1) = value;
+				temp.set(ix,iy,iz, value);
 			}
 
 
-
-
 	CLMatrix3d* result = temp.transferToDevice(context);
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+
+	// Transfer back to host and check the two matrices
+	Matrix3d* copy = result->transferToHost();
+	size_t deltaCells = copy->compare(temp, true);
+
+	delete copy;
+	if(deltaCells > 0) {
+		cerr << "transferring matrix to device: " << deltaCells << " cells varying !! " << endl;
+		throw NumException("Transfer to device failed (deltaCells > 0)");
+	}
+
+	/*
+
+	// Compare just non-null matrices deep
+	if(!temp.isNull(true)) {
+		size_t cells =compareMatrices(matrix, result);
+		if(cells != 0) {
+			cerr << "Transfer to host failed. Matrices varying in " << cells << " out of " << result->sizeTotal() << " cells." << endl;
+			throw NumException("Transfer to device failed (compareMatrices != 0)");
+		}
+	}
+
+	*/
+
+#endif
 	return result;
 }
 
@@ -361,15 +595,70 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 	if(!isInitialized()) this->setupContext();
 
+
 	/*
 	 * -- Problem description: --
 	 *
 	 */
 
+#if TESTING == 1
+
+
+	// Check matrix sizes
+	if(!compareMatrixSize(phi, phi)) throw "Matrix size mismatch: phi, phi";
+	if(!compareMatrixSize(phi, rhs)) throw "Matrix size mismatch: phi, rhs";
+	if(!compareMatrixSize(phi, lambda)) throw "Matrix size mismatch: phi, lambda";
+	if(!compareMatrixSize(phi, Dxx)) throw "Matrix size mismatch: phi, Dxx";
+	if(!compareMatrixSize(phi, Dyy)) throw "Matrix size mismatch: phi, Dyy";
+	if(!compareMatrixSize(phi, Dzz)) throw "Matrix size mismatch: phi, Dzz";
+	if(!compareMatrixSize(phi, Dxy)) throw "Matrix size mismatch: phi, Dxy";
+
+
+
+	const double test_scalar_phi = dot_product(phi);
+	const double test_scalar_rhs = dot_product(rhs);
+	const double test_scalar_lambda = dot_product(lambda);
+
+#endif
+
 	// Transfer matrices to OpenCL context
 	CLMatrix3d *cl_phi = transferMatrix(this->_context, phi, this->_matrix_rhs, this->mx);
 	CLMatrix3d *cl_rhs = transferMatrix(this->_context, rhs, this->_matrix_rhs, this->mx);
 	CLMatrix3d *cl_lambda = transferMatrix(this->_context, lambda, this->_matrix_rhs, this->mx);
+
+	cout << "Lambda:" << endl;
+	print(lambda);
+	cout << endl << "CL_Lambda:" << endl;
+	print(cl_lambda);
+	cout << endl;
+
+#if TESTING == 1
+
+	double test_scalar_cl_phi = cl_phi->dotProduct();
+	double test_scalar_cl_rhs = cl_rhs->dotProduct();
+	double test_scalar_cl_lambda = cl_lambda->dotProduct();
+
+	double test_delta = fabs(test_scalar_phi - test_scalar_cl_phi) +
+			fabs(test_scalar_rhs - test_scalar_cl_rhs) + fabs(test_scalar_lambda - test_scalar_cl_lambda);
+
+	if(test_delta > epsilon) {
+
+		cout << "<phi,phi>       = " << test_scalar_phi << "\t" << test_scalar_cl_phi << "\t DELTA = " << fabs(test_scalar_phi - test_scalar_cl_phi) << endl;
+		cout << "<rhs,rhs>       = " << test_scalar_rhs << "\t" << test_scalar_cl_rhs << "\t DELTA = " << fabs(test_scalar_rhs - test_scalar_cl_rhs) << endl;
+		cout << "<lambda,lambda> = " << test_scalar_lambda << "\t" << test_scalar_cl_lambda << "\t DELTA = " << fabs(test_scalar_lambda - test_scalar_cl_lambda) << endl;
+		cout.flush();
+
+		//print(lambda);
+		//print(cl_lambda);
+
+		cerr << "((!)) TEST DELTA (" << test_delta << ") OF SCALARS > Epsilon (" << epsilon << ")" << endl;
+		cerr.flush();
+		throw NumException("Scalar comparison failed");
+	}
+
+
+#endif
+
 	CLMatrix3d *cl_Dxx = NULL;
 	CLMatrix3d *cl_Dyy = NULL;
 	CLMatrix3d *cl_Dzz = NULL;
@@ -380,12 +669,12 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		cl_Dzz = transferMatrix(this->_context, Dzz, this->_matrix_rhs, this->mx);
 		cl_Dxy = transferMatrix(this->_context, Dxy, this->_matrix_rhs, this->mx);
 	}
-	CLMatrix3d *cl_resTilde = new CLMatrix3d(this->_context, cl_phi->mx(0), cl_phi->mx(1), cl_phi->mx(2));
+	CLMatrix3d *cl_resTilde = new CLMatrix3d(this->_context, cl_phi->mx(0), cl_phi->mx(1), cl_phi->mx(2), NULL, RIM);
 	cl_resTilde->initializeContext();
 	cl_resTilde->clear();
 
 	this->_context->join();
-	cout << "Matrices transferred to host" << endl;
+	cout << "Matrices transferred to host device " << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 	if(!this->checkMatrix(cl_phi)) throw "Initial matrix check failed (phi)";
@@ -403,7 +692,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	try {
 		unsigned long iterations = 0;
 		double normRhs = cl_rhs->l2Norm();
-
 		if(normRhs < 1e-9) normRhs = 1.0;
 
 		cout << "  normRHS = " << normRhs << endl;
@@ -431,6 +719,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
+
+		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		exit(EXIT_FAILURE);
 
 		do {
 			iterations++;

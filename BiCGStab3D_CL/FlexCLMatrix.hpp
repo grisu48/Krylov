@@ -63,10 +63,13 @@ public:
 	size_t rim() { return this->_rim; }
 
 	bool hasNanValues(bool includeRim = true);
+	bool isNull(bool includeRim = true);
 
+	double& get(int x, int y, int z) { return data[index(x,y,z)]; }
 	double& operator()(int x, int y, int z) { return data[index(x,y,z)]; }
 	double& operator[](int index) { return data[index]; }
 	void set(int index, double value) { this->data[index] = value; }
+	void set(int x, int y, int z, double value) { this->data[index(x,y,z)] = value; }
 
 	bool operator==(Matrix3d* matrix) { return this->equals(matrix); }
 	bool operator==(Matrix3d& matrix) { return this->equals(matrix); }
@@ -80,6 +83,9 @@ public:
 	 * returns the number of cells that do not match in the different matrices
 	 */
 	size_t compare(Matrix3d* matrix, bool includeRim = false);
+	/**
+	 * returns the number of cells that do not match in the different matrices
+	 */
 	size_t compare(Matrix3d& matrix, bool includeRim = false) { return this->compare(&matrix, includeRim); }
 
 	void copyFrom(Matrix3d &matrix);
@@ -112,6 +118,10 @@ public:
 	double dotProduct(Matrix3d &matrix, bool includeRim = false) { return this->dotProduct(&matrix, includeRim); }
 	double dotProduct() { return this->dotProduct(this, false); }
 
+	/** Get the absolute maximum value of the matrix */
+	double maxNorm(bool includeRim = false);
+	/** L2 norm of the matrix */
+	double l2Norm(bool includeRim = false);
 
 	/** Set the whole matrix to zero */
 	void clear(void);
@@ -174,8 +184,10 @@ protected:
 	flexCL::Kernel *_kern_MatrixSub = NULL;
 
 	flexCL::Kernel *_kern_Reduction_Local = NULL;
+	flexCL::Kernel *_kern_Reduction_Local_max = NULL;
 
 	flexCL::Kernel *_kern_ArraySet = NULL;
+	flexCL::Kernel *_kern_ArrayAbs = NULL;
 	flexCL::Kernel *_kern_ArrayAdd = NULL;
 	flexCL::Kernel *_kern_ArraySub = NULL;
 	flexCL::Kernel *_kern_ArrayMul = NULL;
@@ -189,6 +201,8 @@ protected:
 
 
 	void clArraySet(cl_mem array, size_t size, size_t offset = 0, double value = 0.0);
+	void clArrayAbs(cl_mem array, size_t size, size_t offset = 0);
+
 
 	void clArrayArrayAdd(cl_mem array1, cl_mem array2, cl_mem dst, size_t size);
 	void clArrayArraySub(cl_mem array1, cl_mem array2, cl_mem dst, size_t size);
@@ -202,6 +216,8 @@ protected:
 	void clArraySubMul(cl_mem array1, cl_mem array2, cl_mem dst, size_t size, double value);
 
 	double reduction_double(cl_mem buffer, size_t size, size_t offset = 0);
+	double reduction_max_double(cl_mem buffer, size_t size, size_t offset = 0);
+	double array_max(cl_mem buffer, size_t size, size_t offset = 0);
 
 	/** Aquire buffer with the given number of double cells  */
 	void aquireBuffer(size_t size);
@@ -329,7 +345,7 @@ public:
 	double dotProduct(CLMatrix3d &matrix) { return this->dotProduct(&matrix); }
 	double dotProduct() { return this->dotProduct(this); }
 	double l2Norm(void);
-
+	double maxNorm(bool includeRim = false);
 
 	/** Get a certain value. Very slow, do NOT use this if not absolutely necessary! */
 	//double operator()(int x, int y, int z);

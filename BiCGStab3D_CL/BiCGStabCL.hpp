@@ -21,12 +21,25 @@
 #include "FlexCL.hpp"
 #include "FlexCLMatrix.hpp"
 
+#include <exception>
+#include <string>
+
 #if COMPARE_SOLVER == 1
 #include "solveLin_BICGStab.H"
 #endif
 
 
+class NumException : public std::exception {
+private:
+	std::string _message;
+public:
+	NumException() {}
+	NumException(std::string message) { this->_message = message; }
+	NumException(const char* msg) { this->_message = std::string(msg); }
+	virtual ~NumException() {}
 
+	virtual const char* what() const _GLIBCXX_USE_NOEXCEPT { return this->_message.c_str(); }
+};
 
 class BiCGStabSolver: public Linsolver3D {
 private:
