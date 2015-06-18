@@ -11,6 +11,7 @@
 
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <cstdlib>
 #include <cmath>
@@ -30,6 +31,34 @@ using namespace flexCL;
 // Default size
 #define SIZE 32
 
+#if 0
+static void printMatXY(NumMatrix<double, 3> &mat, int z, ostream &out = cout) {
+	ssize_t low[3];
+	ssize_t high[3];
+	for(int i=0;i<3;i++) {
+		low[i] = mat.getLow(i);
+		high[i] = mat.getHigh(i);
+	}
+
+	int rows = 0;
+	for(ssize_t x=low[0]; x<high[0]; x++) {
+		out << ++rows << "\t|";
+		for(ssize_t y=low[1]; y<high[1]; y++) {
+			out << '\t' << mat(x,y,z);
+		}
+		out << '\n';
+	}
+	out.flush();
+}
+static void printMat(NumMatrix<double, 3> &mat, ostream &out = cout) {
+	const ssize_t low = mat.getLow(2);
+	const ssize_t high = mat.getHigh(2);
+
+	for(ssize_t z = low; z < high; z++) {
+		printMatXY(mat, z, out);
+	}
+}
+#endif
 
 /* ==== Program configuration ==== */
 static size_t size = SIZE;
@@ -142,9 +171,11 @@ int main(int argc, char** argv) {
 	diffTens[1].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	diffTens[2].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	diffTens[3].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
-	//const double dx = grid.get_delx(0);
-	//const double dy = grid.get_delx(1);
-	//const double dz = grid.get_delx(2);
+	diff(0) = 1.;
+	diff(1) = 1.;
+	diff(2) = 100.;
+	diff(2) = 10.;
+
 
 	// Setting grid values
 	try {
@@ -164,6 +195,8 @@ int main(int argc, char** argv) {
 				for(size_t ix = 0; ix <= mx[0]; ++ix) {
 					const double xVal = grid.get_Pos(0,ix);
 
+					// cout << "[" << ix << "," << iy << "," << iz << "] = (" << xVal << "," << yVal << "," << zVal << ")" << endl;
+
 					phi_exact(ix,iy,iz) = sin(M_PI * xVal)*sin(M_PI * yVal)*sin(M_PI * zVal);
 					lambda(ix,iy,iz) = 0.2*xVal*sqr(yVal)*zVal;
 
@@ -181,6 +214,7 @@ int main(int argc, char** argv) {
 				}
 			}
 		}
+
 	} catch(const char* msg) {
 		cerr << "Error setting up grid values: " << msg << endl;
 		return EXIT_FAILURE;
@@ -229,7 +263,14 @@ int main(int argc, char** argv) {
 	cout << "  Running calculation ... " << endl;
 
 	try {
-		solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
+
+		if(testSwitch == TEST_ONE) {
+			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
+		} else {
+			cerr << "UNKNOWN TEST SWITCH: " << testSwitch << endl;
+			return EXIT_FAILURE;
+		}
+
 
 		calc_runtime += time_ms();
 		cout << "  Computation complete. Calculation time: " << calc_runtime << " ms" << endl;

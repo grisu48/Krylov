@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include "grid_manager.H"
 #include "BoundaryHandler.H"
@@ -8,6 +9,36 @@
 // #include "SteadyStateMultigrid3DDiff.H"
 
 using namespace std;
+
+
+
+static void printMatXY(NumMatrix<double, 3> &mat, int z, ostream &out = cout) {
+	ssize_t low[3];
+	ssize_t high[3];
+	for(int i=0;i<3;i++) {
+		low[i] = mat.getLow(i);
+		high[i] = mat.getHigh(i);
+	}
+
+	int rows = 0;
+	for(ssize_t x=low[0]; x<high[0]; x++) {
+		out << ++rows << "\t|";
+		for(ssize_t y=low[1]; y<high[1]; y++) {
+			out << '\t' << mat(x,y,z);
+		}
+		out << '\n';
+	}
+	out.flush();
+}
+static void printMat(NumMatrix<double, 3> &mat, ostream &out = cout) {
+	const ssize_t low = mat.getLow(2);
+	const ssize_t high = mat.getHigh(2);
+
+	for(ssize_t z = low; z < high; z++) {
+		printMatXY(mat, z, out);
+	}
+}
+
 
 
 int main(int argc, char *argv[]) {
@@ -82,7 +113,7 @@ int main(int argc, char *argv[]) {
 	// Prepare the problem:
 	NumMatrix<double,3> phi_ana, phi;
 	NumMatrix<double,3> rhs;
-	NumMatrix<double,3> lambda;	
+	NumMatrix<double,3> lambda;
 	NumMatrix<double,3> DiffTens[4];
 
 	phi.resize(Index::set(-1,-1,-1),
@@ -125,7 +156,7 @@ int main(int argc, char *argv[]) {
 	DiffTens[3].clear();
 
 	// choice of test to be run
-	int switch_test(2);
+	int switch_test(1);
 
 	double DPar = 1.;
 	double DPerp = 0.1;
@@ -136,7 +167,7 @@ int main(int argc, char *argv[]) {
 	// for(int iz = -1; iz <= mx[2]+1; ++iz) {
 	// 	for(int iy = -1; iy <= mx[1]+1; ++iy) {
 	// 		for(int ix = -1; ix <= mx[0]+1; ++ix) {
-				
+
 				// double xVal = ix*dx;
 				// double yVal = iy*dy;
 				// double zVal = iz*dz;
@@ -151,12 +182,14 @@ int main(int argc, char *argv[]) {
 				double zVal = MyGrid.get_Pos(2,iz);
 #endif
 
+				//cout << "[" << ix << "," << iy << "," << iz << "] = (" << xVal << "," << yVal << "," << zVal << ")" << endl;
+
 				// phi_ana(ix,iy,iz) = sin(2.*pi*xVal)*sin(2.*pi*yVal)*
 				// 	sin(2.*pi*zVal);
 				phi_ana(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 				lambda(ix,iy,iz) = 0.2*xVal*sqr(yVal)*zVal;
 //				lambda(ix,iy,iz) = xVal;
-				
+
 				// rhs(ix,iy,iz) = -4*sqr(pi)*(Diff(0) + Diff(1) + Diff(2))*
 				// 	phi_ana(ix,iy,iz);
 				if(switch_test==1) {
@@ -166,7 +199,7 @@ int main(int argc, char *argv[]) {
 					// DiffTens[0](ix,iy,iz) = 1.;
 					// DiffTens[1](ix,iy,iz) = 1.;
 					// DiffTens[2](ix,iy,iz) = zVal;
-					
+
 					// rhs(ix,iy,iz) = -sqr(pi)*(DiffTens[0](ix,iy,iz) +
 					//                           DiffTens[1](ix,iy,iz) +
 					//                           DiffTens[2](ix,iy,iz))*phi_ana(ix,iy,iz) +
@@ -184,11 +217,11 @@ int main(int argc, char *argv[]) {
 
 				// Test 2 (räumliche Diffusion)
 					phi_ana(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
-					
+
 					DiffTens[0](ix,iy,iz) = yVal;
 					DiffTens[1](ix,iy,iz) = xVal;
 					DiffTens[2](ix,iy,iz) = zVal;
-					
+
 					rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) +
 					                  lambda(ix,iy,iz))*phi_ana(ix,iy,iz) +
 						pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal);
@@ -221,7 +254,7 @@ int main(int argc, char *argv[]) {
 						cout << endl;
 					}
 
-					
+
 				} else if (switch_test==3) {
 					// Test 3 (räumliche Diffusion mit D_xy)
 
@@ -246,9 +279,9 @@ int main(int argc, char *argv[]) {
 					// cout << " muii" << endl;
 					// Test 4 (räumliche Diffusion - Zylinderrichtung)
 					phi_ana(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
-					
+
 					double angle = atan2(yVal, xVal);
-					
+
 					DiffTens[0](ix,iy,iz) = (DPar*sqr(sin(angle)) +
 					                         DPerp*sqr(cos(angle)));
 					DiffTens[1](ix,iy,iz) = (DPar*sqr(cos(angle)) +
@@ -274,7 +307,7 @@ int main(int argc, char *argv[]) {
 					double dDxyDy = (DPerp - DPar)*(sqr(cos(angle)) -
 					                                sqr(sin(angle)))*dphidy;
 
-					rhs(ix,iy,iz) = 
+					rhs(ix,iy,iz) =
 						(dDyyDy + dDxyDx)*pi*sin(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) +
 						(dDxxDx + dDxyDy)*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal) +
 						2.*Dxy*sqr(pi)*cos(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) -
@@ -311,7 +344,7 @@ int main(int argc, char *argv[]) {
 				//                           DiffTens[1](ix,iy,iz) +
 				//                           DiffTens[2](ix,iy,iz))*phi_ana(ix,iy,iz) +
 				// 	pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
-				
+
 			}
 		}
 	}
@@ -326,7 +359,7 @@ int main(int argc, char *argv[]) {
 
 	// SteadyDiffSolver.solve(MyBounds, phi, rhs, lambda,
 	//                        Diff(0), Diff(1), Diff(2), true);
-	
+
 	// exit(3);
 	// constructor with spatial diffusion
 	//	Steady_MGDiff SteadyDiffSolver(diffErr,1,1,1, MyGrid, true);
@@ -368,7 +401,7 @@ int main(int argc, char *argv[]) {
 
 	double coeff_xy = 1./(2.*dx*dy);
 
-	
+
 	// Now let's have a look:
 	double error(0.), num(0.);
 	for(int iz = 0; iz <= mx[2]; ++iz) {
@@ -383,14 +416,14 @@ int main(int argc, char *argv[]) {
 					std::cout << phi_ana(ix,iy,iz)-phi(ix,iy,iz) << " ";
 					std::cout << std::endl;
 
-					// double disc = 
+					// double disc =
 					// 	(coeff[0]*Dxx(ix,iy,iz)*(phi(ix+1,iy,iz) +
 					// 	                         phi(ix-1,iy,iz)) +
 					// 	 coeff[1]*Dyy(ix,iy,iz)*(phi(ix,iy+1,iz) +
 					// 	                         phi(ix,iy-1,iz)) +
 					// 	 coeff[2]*Dzz(ix,iy,iz)*(phi(ix,iy,iz+1) +
 					// 	                         phi(ix,iy,iz-1)) -
-					// 	 2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) + 
+					// 	 2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
 					// 	     coeff[2]*Dzz(ix,iy,iz))*phi(ix,iy,iz) +
 					// 	 coeff_xy*Dxy(ix,iy,iz)*(phi(ix+1,iy+1,iz) -
 					// 	                         phi(ix+1,iy-1,iz) -
@@ -428,7 +461,7 @@ int main(int argc, char *argv[]) {
 	double l2err = sqrt(error/num);
 
 #ifdef parallel
-	if(MyMPI.get_rank()==0) 
+	if(MyMPI.get_rank()==0)
 #endif
 	std::cout << " l2 error for " << mx[0] << " is " << l2err << std::endl;
 

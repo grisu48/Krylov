@@ -102,7 +102,7 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 	dst[index] = result;
 }
 
-__kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ) {
+__kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ, REAL diffDiagX, REAL diffDaigY, REAL diffDiagZ) {
 #if FAKE_GENERATE_AX == 1
 	return;
 #endif
@@ -113,16 +113,15 @@ __kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __
 	REAL result = 0.0;
 	//printf("generateAx[%2d,%2d,%2d] (%2d,%2d,%2d)\n",x,y,z,mx,my,mz);
 	
-	const REAL coeff[3] = {1.0/sqr(deltaX), 1.0/sqr(deltaY), 1.0/sqr(deltaZ) };
-	const REAL coeff_xy = 1.0 / (2.0 * coeff[0] * coeff[1]);
 	
+	const REAL coeff[3] = {diffDiagX/sqr(deltaX), diffDaigY/sqr(deltaY), diffDiagZ/sqr(deltaZ) };
 	
 	// Build matrix
-	result  = coeff[0] * (psi[matrix_index(x+1,y,z,mx,my,mz)] + psi[matrix_index(x-1,y,z,mx,my,mz)]);
-	result += coeff[1] * (psi[matrix_index(x,y+1,z,mx,my,mz)] + psi[matrix_index(x,y-1,z,mx,my,mz)]);
-	result += coeff[2] * (psi[matrix_index(x,y,z+1,mx,my,mz)] + psi[matrix_index(x,y,z+1,mx,my,mz)]);
+	result  = coeff[0] * (psi[matrix_index(x+1,y  ,z   ,mx,my,mz)] + psi[matrix_index(x-1,y  ,z  ,mx,my,mz)]);
+	result += coeff[1] * (psi[matrix_index(x  ,y+1,z   ,mx,my,mz)] + psi[matrix_index(x  ,y-1,z  ,mx,my,mz)]);
+	result += coeff[2] * (psi[matrix_index(x  ,   y,z+1,mx,my,mz)] + psi[matrix_index(x  ,y  ,z+1,mx,my,mz)]);
 
-	result -= ( 2.0 * (coeff[0] * + coeff[1] + coeff[2] ));
+	result -= ( 2.0 * (coeff[0] + coeff[1] + coeff[2] ));
 	result += lambda[index] * psi[index];
 	
 	// Done

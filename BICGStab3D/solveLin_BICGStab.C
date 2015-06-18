@@ -6,6 +6,24 @@
 
 using namespace std;
 
+
+
+
+void print(NumMatrix<double, 3> &matrix) {
+	// Print now output matrix at middle position
+	size_t z = matrix.getHigh(2)/2;
+	size_t y = matrix.getHigh(1)/2;
+	size_t mx = matrix.getHigh(0);
+
+	for(size_t x = 0; x < mx; x++) {
+		cout << matrix(x,y,z) << '\t';
+	}
+	cout << endl;
+}
+
+
+
+
 BICGStab::BICGStab(grid_manager &TheGrid, double tol, int LValue,
 #ifdef parallel
                    mpi_manager_3D &MyMPI,
@@ -36,7 +54,7 @@ BICGStab::BICGStab(grid_manager &TheGrid, double tol, int LValue,
 void BICGStab::make_Arrays(int mx, int my, int mz) {
 	residuals = new NumMatrix<double,3> [LValue+1];
 	uMat = new NumMatrix<double,3> [LValue+1];
-	
+
 	for(int level=0; level<=LValue; ++level) {
 		residuals[level].resize(Index::set(-1,-1,-1),
 		                        Index::set(mx+1, my+1, mz+1));
@@ -83,7 +101,7 @@ double BICGStab::get_l2Norm(NumMatrix<double,3> &vec) {
 #endif
 	if(valMax == 0.) return 0;
 	double scaleFactor = 1./valMax;
-	
+
 	double sum(0.);
 	if(dim==3) {
 		// for(int iz = 0; iz <= mx[2]; iz++) {
@@ -142,7 +160,7 @@ double BICGStab::get_l2Norm(NumMatrix<double,3> &vec) {
 			sum += 0.25*sqr(scaleFactor*vec(mx[0],iy,   0 ));
 			sum += 0.25*sqr(scaleFactor*vec(mx[0],iy,mx[2]));
 		}
-		
+
 		for(int ix = 1; ix < mx[0]; ++ix) {
 			sum += 0.25*sqr(scaleFactor*vec(ix,   0 ,   0 ));
 			sum += 0.25*sqr(scaleFactor*vec(ix,   0 ,mx[2]));
@@ -231,7 +249,7 @@ double BICGStab::dot_product(NumMatrix<double,3> &vecA,
 			result += 0.25*vecA(0,iy,mx[2])*vecB(0,iy,mx[2]);
 			result += 0.25*vecA(mx[0],iy,mx[2])*vecB(mx[0],iy,mx[2]);
 		}
-		
+
 		for(int ix = 1; ix < mx[0]; ix += 1) {
 			result += 0.25*vecA(ix,0,0)*vecB(ix,0,0);
 			result += 0.25*vecA(ix,mx[1],0)*vecB(ix,mx[1],0);
@@ -264,12 +282,16 @@ void BICGStab::get_Residual(BoundaryHandler3D &bounds,
                             NumMatrix<double,3> &psi, NumMatrix<double,3> &rhs,
                             NumMatrix<double,3> &lambda,
                             NumMatrix<double,3> &residual){
-	
+
 	//! Compute residual of matrix equation
 	/*! Version with spatially constant diffusion*/
 
+	cout << "psi:     "; print(psi);
+	cout << "lambda:  "; print(lambda);
 	multiply_withMat(bounds, psi, lambda, residual, false);
+	cout << "res:     "; print(residual);
 	residual += rhs;
+	cout << "res:     "; print(residual);
 
 
 //	int mx[dim];
@@ -302,7 +324,6 @@ void BICGStab::get_Residual(BoundaryHandler3D &bounds,
 //		}
 //	}
 
-
 	bounds.do_BCs(residual, 1);
 
 }
@@ -318,7 +339,7 @@ void BICGStab::get_Residual(BoundaryHandler3D &bounds,
                             NumMatrix<double,3> &Dyy,
                             NumMatrix<double,3> &Dzz,
                             NumMatrix<double,3> &Dxy){
-	
+
 	//! Compute residual of matrix equation
 
 	multiply_withMat(bounds, psi, lambda, Dxx, Dyy, Dzz, Dxy, residual, false);
@@ -432,14 +453,14 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 			for(int iy = 0; iy <= mx[1]; iy++) {
 				for(int ix = 0; ix <= mx[0]; ix++) {
 
-					vecOut(ix,iy,iz) = 
+					vecOut(ix,iy,iz) =
 						(coeff[0]*Dxx(ix,iy,iz)*(psi(ix+1,iy,iz) +
 						                         psi(ix-1,iy,iz)) +
 						 coeff[1]*Dyy(ix,iy,iz)*(psi(ix,iy+1,iz) +
 						                         psi(ix,iy-1,iz)) +
 						 coeff[2]*Dzz(ix,iy,iz)*(psi(ix,iy,iz+1) +
 						                         psi(ix,iy,iz-1)) -
-						 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) + 
+						 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
 						      coeff[2]*Dzz(ix,iy,iz)) +
 						  lambda(ix,iy,iz))*psi(ix,iy,iz) +
 						 coeff_xy*Dxy(ix,iy,iz)*(psi(ix+1,iy+1,iz) -
@@ -455,14 +476,14 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 						 ((Dzz(ix,iy,iz+1) - Dzz(ix,iy,iz-1))/(2.*delx[2]))*
 						 (psi(ix,iy,iz+1) - psi(ix,iy,iz-1))/(2.*delx[2]));
 
-					// vecOut(ix,iy,iz) = 
+					// vecOut(ix,iy,iz) =
 					// 	(coeff[0]*Dxx(ix,iy,iz)*(psi(ix+1,iy,iz) +
 					// 	                         psi(ix-1,iy,iz)) +
 					// 	 coeff[1]*Dyy(ix,iy,iz)*(psi(ix,iy+1,iz) +
 					// 	                         psi(ix,iy-1,iz)) +
 					// 	 coeff[2]*Dzz(ix,iy,iz)*(psi(ix,iy,iz+1) +
 					// 	                         psi(ix,iy,iz-1)) -
-					// 	 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) + 
+					// 	 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
 					// 	      coeff[2]*Dzz(ix,iy,iz)) +
 					// 	  lambda(ix,iy,iz))*psi(ix,iy,iz) +
 					// 	 ((Dxx(ix+1,iy,iz) - Dxx(ix-1,iy,iz))/(2.*delx[0]))*
@@ -540,7 +561,6 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 	 if(apply_bcs) {
 	 	bounds.do_BCs(vecOut, 1);
 	 }
-
 }
 
 void BICGStab::add_MatTimesVec(NumMatrix<double,3> &result,
@@ -604,6 +624,8 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	double normRHS = get_l2Norm(rhs);
 	if(normRHS == 0.) normRHS = 1.;
 
+	cout << "  normRHS = " << normRHS << endl;
+
 	int iter_steps=0;
 
 	// compute r_0
@@ -616,6 +638,8 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 	resTilde = residuals[0];
 
+	cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
+
 	double norm(1.e99);
 	double rho0(1.), rho1;
 	double alpha(0.);
@@ -626,7 +650,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	double gamma[LValue+1];
 
 	do {
-		iter_steps++; 
+		iter_steps++;
 		//		if(iter_steps==15) exit(3);
 		if(rank==0 && debug>2) {
 			cout << " Iterations done " << iter_steps << endl;
@@ -677,7 +701,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 				multiply_withMat(bounds, residuals[jj], lambda,
 				                 residuals[jj+1]);
 			}
-			
+
 			phi += uMat[0]*alpha;
 
 		}
@@ -722,7 +746,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		phi += residuals[0]*gamma[1];
 		residuals[0] -= residuals[LValue]*gammap[LValue];
 		uMat[0] -= uMat[LValue]*gamma[LValue];
-		
+
 		for(int jj=1; jj<LValue; ++jj) {
 			uMat[0] -= uMat[jj]*gamma[jj];
 			phi     += residuals[jj]*gammapp[jj];

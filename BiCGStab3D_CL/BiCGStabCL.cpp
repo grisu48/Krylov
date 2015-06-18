@@ -131,6 +131,40 @@ inline double dot_product(NumMatrix<double,3> &vec) {
 	return dot_product(vec,vec);
 }
 
+double get_l2Norm(NumMatrix<double,3> &vec) {
+	const double dotProd = dot_product(vec);
+	return sqrt(dotProd);
+}
+
+void print(NumMatrix<double, 3> &matrix) {
+	// Print now output matrix at middle position
+	size_t z = matrix.getHigh(2)/2;
+	size_t y = matrix.getHigh(1)/2;
+	size_t mx = matrix.getHigh(0);
+
+	for(size_t x = 0; x < mx; x++) {
+		cout << matrix(x,y,z) << '\t';
+	}
+	cout << endl;
+}
+
+void print(flexCL::CLMatrix3d *matrix) {
+	// Print now output matrix at middle position
+	size_t z = matrix->mx(2)/2-1;
+	size_t y = matrix->mx(1)/2-1;
+	size_t mx = matrix->mx(0)-1;
+
+	Matrix3d *matLocal = matrix->transferToHost();
+	for(size_t x = 0; x < mx; x++) {
+	//	for(size_t y = 0; y < this->mx[1]; y++)
+			cout << matLocal->get(x,y,z) << '\t';
+	}
+	cout << endl;
+	delete matLocal;
+}
+
+#if 0
+
 /**
  * Print slice of the matrix as z/2
  */
@@ -190,6 +224,7 @@ void print(CLMatrix3d *matrix) {
  */
 inline void print(CLMatrix3d &matrix) { print(&matrix); }
 
+#endif
 
 bool compareMatrixSize(NumMatrix<double,3> &matA, NumMatrix<double,3> &matB) {
 	for(int i=0;i<3;i++) {
@@ -505,6 +540,10 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_clKernelGenerateAx_NoSpatial->setArgument(7, this->deltaX[1]);
 	this->_clKernelGenerateAx_NoSpatial->setArgument(8, this->deltaX[2]);
 
+	this->_clKernelGenerateAx_NoSpatial->setArgument(9, this->diffDiag[0]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(10, this->diffDiag[1]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(11, this->diffDiag[2]);
+
 	// When enqueueing use only mx without ghost cells!
 	this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
 
@@ -517,8 +556,10 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_context->join();
 	if(!this->checkMatrix(dst)) throw "generateAx_NoSpatial produces illegal values in dst";
 #endif
-
 	applyBoundary(dst);
+
+
+
 }
 
 bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d &matrix) {
@@ -551,7 +592,11 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 	unsigned long runtime = 0L;
 #endif
 
+	cout << "phi:     "; print(phi);
+	cout << "lambda:  "; print(lambda);
+	// Use residual as intermediate buffer
 	this->generateAx(phi, residual, lambda);
+	cout << "res:     "; print(residual);
 #if PROFILING == 1
 	runtime += _clKernelGenerateAx_NoSpatial->runtime();
 #endif
@@ -562,6 +607,7 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #endif
 
 	residual->add(rhs);
+	cout << "res:     "; print(residual);
 #if PROFILING == 1
 	runtime += residual->lastKernelRuntime();
 #endif
@@ -595,14 +641,12 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 	if(!isInitialized()) this->setupContext();
 
-
 	/*
 	 * -- Problem description: --
 	 *
 	 */
 
 #if TESTING == 1
-
 
 	// Check matrix sizes
 	if(!compareMatrixSize(phi, phi)) throw "Matrix size mismatch: phi, phi";
@@ -612,8 +656,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	if(!compareMatrixSize(phi, Dyy)) throw "Matrix size mismatch: phi, Dyy";
 	if(!compareMatrixSize(phi, Dzz)) throw "Matrix size mismatch: phi, Dzz";
 	if(!compareMatrixSize(phi, Dxy)) throw "Matrix size mismatch: phi, Dxy";
-
-
 
 	const double test_scalar_phi = dot_product(phi);
 	const double test_scalar_rhs = dot_product(rhs);
@@ -626,11 +668,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	CLMatrix3d *cl_rhs = transferMatrix(this->_context, rhs, this->_matrix_rhs, this->mx);
 	CLMatrix3d *cl_lambda = transferMatrix(this->_context, lambda, this->_matrix_rhs, this->mx);
 
-	cout << "Lambda:" << endl;
-	print(lambda);
-	cout << endl << "CL_Lambda:" << endl;
-	print(cl_lambda);
-	cout << endl;
 
 #if TESTING == 1
 
@@ -647,9 +684,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		cout << "<rhs,rhs>       = " << test_scalar_rhs << "\t" << test_scalar_cl_rhs << "\t DELTA = " << fabs(test_scalar_rhs - test_scalar_cl_rhs) << endl;
 		cout << "<lambda,lambda> = " << test_scalar_lambda << "\t" << test_scalar_cl_lambda << "\t DELTA = " << fabs(test_scalar_lambda - test_scalar_cl_lambda) << endl;
 		cout.flush();
-
-		//print(lambda);
-		//print(cl_lambda);
 
 		cerr << "((!)) TEST DELTA (" << test_delta << ") OF SCALARS > Epsilon (" << epsilon << ")" << endl;
 		cerr.flush();
@@ -694,7 +728,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		double normRhs = cl_rhs->l2Norm();
 		if(normRhs < 1e-9) normRhs = 1.0;
 
-		cout << "  normRHS = " << normRhs << endl;
+		cout << "  normRHS  = " << normRhs << endl;
+		cout << "  Expected = " << get_l2Norm(rhs) << endl;
 
 		// Mathematical variables
 		double rho0 = 1.0;
@@ -702,13 +737,11 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		double alpha = 0.0;
 		double omega = 1.0;
 		double norm = 0.0;
-
 		double tau[lValue+1][lValue+1];
 		double sigma[lValue+1], gammap[lValue+1], gammapp[lValue+1];
 		double _gamma[lValue+1];
 
 		// Calculate r_0
-
 		if(use_spatialDiffusion) {
 			this->calculateResidual(this->_matrix_residuals[0], cl_phi, cl_rhs, cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 		} else {
