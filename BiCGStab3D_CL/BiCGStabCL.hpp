@@ -123,6 +123,8 @@ public:
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
 
+	virtual void test(void);
+
 };
 
 #endif /* BICGSTABCL_HPP_ */

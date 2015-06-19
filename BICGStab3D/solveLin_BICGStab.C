@@ -2,6 +2,8 @@
 #include <fstream>
 #include <stdlib.h>     /* exit, EXIT_FAILURE */
 #include <iomanip>
+#include <string>
+#include <sstream>
 
 #include "solveLin_BICGStab.H"
 
@@ -9,6 +11,29 @@ using namespace std;
 
 
 
+
+double hash(NumMatrix<double, 3> &matrix) {
+	//const long brick = 107534845447;		// Random prime number (HUGE)
+
+	ssize_t _low[3];
+	ssize_t _high[3];
+	for(int i=0;i<3;i++) {
+		_low[i]   = matrix.getLow(i);
+		_high[i]  = matrix.getHigh(i);
+	}
+
+	double value = 1.0;
+
+	for(ssize_t x = _low[0]; x < _high[0]; x++) {
+		for(ssize_t y = _low[1]; y < _high[1]; y++) {
+			for(ssize_t z = _low[2]; z < _high[2]; z++) {
+				value += (x*y*z) * matrix(x,y,z);
+			}
+		}
+	}
+
+	return value;
+}
 
 void print(NumMatrix<double, 3> &matrix) {
 	// Print now output matrix at middle position
@@ -32,7 +57,7 @@ void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 
 	for(ssize_t x = _low[0]; x < _high[0]; x++) {
-		int row = -_low[0];
+		int row = _low[0];
 		for(ssize_t y = _low[1]; y < _high[1]; y++) {
 			out << ++row << "\t|";
 			for(ssize_t z = _low[2]; z < _high[2]; z++) {
@@ -584,39 +609,26 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 		for(int iz = 0; iz <= mx[2]; iz++) {
 			for(int iy = 0; iy <= mx[1]; iy++) {
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					const double expectedValue = (coeff[0]*(psi(ix+1,iy,iz) +
+					const double value = (coeff[0]*(psi(ix+1,iy,iz) +
 					                              psi(ix-1,iy,iz)) +
 					                    coeff[1]*(psi(ix,iy+1,iz) +
 					                              psi(ix,iy-1,iz)) +
 					                    coeff[2]*(psi(ix,iy,iz+1) +
 					                              psi(ix,iy,iz-1)) -
-					                    (2.*(coeff[0] + coeff[1] +
-					                    		coeff[2]) + lambda(ix,iy,iz))*psi(ix,iy,iz));
-
-
-					double value = (coeff[0]*(psi(ix+1,iy,iz) +
-					                              psi(ix-1,iy,iz)) +
-					                    coeff[1]*(psi(ix,iy+1,iz) +
-					                              psi(ix,iy-1,iz)) +
-					                    coeff[2]*(psi(ix,iy,iz+1) +
-					                              psi(ix,iy,iz-1)));
-					value -= (2.*(coeff[0] + coeff[1] + coeff[2]) + lambda(ix,iy,iz))*psi(ix,iy,iz);
-
+					                    (2.*(coeff[0] + coeff[1] + coeff[2]) + lambda(ix,iy,iz)) * psi(ix,iy,iz));
 					vecOut(ix,iy,iz) = value;
-
-					if(value != expectedValue) {
-						cerr << "value != expectedValue" << endl;
-						exit(5);
-					}
-
 				}
 			}
 		}
 	}
 
-	 if(apply_bcs) {
-	 	bounds.do_BCs(vecOut, 1);
-	 }
+	printFull(vecOut, "/home/phoenix/temp/Ax_NoBc");
+
+	if(apply_bcs) {
+		bounds.do_BCs(vecOut, 1);
+	}
+
+	printFull(vecOut, "/home/phoenix/temp/Ax");
 
 }
 
@@ -695,12 +707,8 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	}
 
 	resTilde = residuals[0];
-
 	cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
-	print(resTilde);
-	printFull(resTilde, "/home/phoenix/temp/resTilde");
-	cout << "Written." << endl;
-	exit(9);
+	printFull(residuals[0], "/home/phoenix/temp/PRIM_RESIDUAL");
 
 	double norm(1.e99);
 	double rho0(1.), rho1;
@@ -718,34 +726,66 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			cout << " Iterations done " << iter_steps << endl;
 		}
 
+		cout << "omega = " << omega << endl;
 		rho0 *= -omega;
+		cout << "rho0 = " << rho0 << endl;
+
+
+
 
 		// BI-CG part:
 		for(int jj=0; jj<LValue; ++jj) {
+			cout << "jj iteration " << jj << endl;
+
+			cout << "<res[" << jj << "],res[" << jj << "]> = " << dot_product(residuals[jj], residuals[jj]) << endl;
+			cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
 
 			rho1 = dot_product(residuals[jj], resTilde);
 			cout << "rho1 = " << rho1 << endl;
 
 			double beta = alpha*rho1/rho0;
+			cout << "beta = " << beta << endl;
 			//			cout << " Anf: " << beta << " " << rho0 << " " << rho1 << " " << alpha << endl;
 			//			cout << " Some vals " << residuals[jj](3,5,9) << " " << resTilde(3,5,9) << endl;
 			rho0 = rho1;
 
 			// \hat u_i = \hat r_i - \beta \hat u_i
 			for(int ii=0; ii<=jj; ++ii) {
+				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 				uMat[ii] *= -beta;
+				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 				uMat[ii] += residuals[ii];
+				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
+
+				stringstream sfilename;
+				sfilename << "/home/phoenix/temp/uMat[" << ii << "]";
+				string filename = sfilename.str();
+				printFull(uMat[ii], filename.c_str());
+
+
+				sfilename.str("");
+				sfilename << "/home/phoenix/temp/residual[" << ii << "]";
+				filename = sfilename.str();
+				printFull(residuals[ii], filename.c_str());
 			}
 
 			// cout << " uMat: " << uMat[0](3,5,0) << endl;
 			if(use_spatialDiffusion) {
-				multiply_withMat(bounds, uMat[jj], lambda,
-				                 Dxx, Dyy, Dzz, Dxy, uMat[jj+1]);
+				multiply_withMat(bounds, uMat[jj], lambda, Dxx, Dyy, Dzz, Dxy, uMat[jj+1]);
 			} else {
 				multiply_withMat(bounds, uMat[jj], lambda, uMat[jj+1]);
 			}
+			cout << "multiply_withMat." << endl;
+			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
+			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
+			cout << "hash(lambda) = " << hash(lambda) << endl;
+			exit(0);
+			printFull(uMat[jj+1], "/home/phoenix/temp/uMat_jj");
+
+			cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
 
 			alpha = rho0/dot_product(uMat[jj+1], resTilde);
+			cout << "alpha = " << alpha << endl;
 			// cout << " rho " << alpha << " " << rho0 << " " << dot_product(uMat[jj+1], resTilde) << endl;
 			// cout << " Beta " << beta << " " << rho1 << endl;
 
@@ -758,18 +798,23 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 			// \hat r_{j+1} = A \hat r_j
 			if(use_spatialDiffusion) {
-				multiply_withMat(bounds, residuals[jj], lambda, Dxx, Dyy,
-				                 Dzz, Dxy, residuals[jj+1]);
+				multiply_withMat(bounds, residuals[jj], lambda, Dxx, Dyy, Dzz, Dxy, residuals[jj+1]);
 			} else {
-				multiply_withMat(bounds, residuals[jj], lambda,
-				                 residuals[jj+1]);
+				multiply_withMat(bounds, residuals[jj], lambda, residuals[jj+1]);
 			}
+
+			stringstream sfilename;
+			sfilename << "/home/phoenix/temp/Ax_Residual_" << (jj+1);
+			string filename = sfilename.str();
+			printFull(residuals[jj+1], filename.c_str());
 
 			phi += uMat[0]*alpha;
 
 		}
 
-		// cout << alpha << endl;
+		cout << "alpha = " << alpha << endl;
+		cout << "<phi, phi> = " << dot_product(phi, phi) << endl;
+		exit(8);
 
 		// if(iter_steps==1) exit(3);
 

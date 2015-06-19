@@ -44,18 +44,18 @@ inline REAL sqr(REAL x) { return x*x; }
 
 
 __kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz, size_t rim) {
-	// Coordinates are shifted by RIM
+	// NOTE: Here mx = mx (NOT mx + 2*rim!!)
+	
+	// Since the BiCGStab kernel is transparent for RIM cells, we have to add them here.
 	const ssize_t x = get_global_id(0) - rim;
 	const ssize_t y = get_global_id(1) - rim;
 	const ssize_t z = get_global_id(2) - rim;
 	
 	
 	// XXX: OpenCL Divergence in x and z direction :-(
-	bool _isBoundary = (x < 0 || y < 0 || z < 0) || (x >= mx+rim || y >= my+rim || z >= mz+rim);
+	bool _isBoundary = (x < 0 || y < 0 || z < 0) || (x >= mx || y >= my || z >= mz);
 	if(_isBoundary) {
-		matrix[matrix_index(x+rim,y+rim,z+rim,mx,my,mz)] = -42.0;
-		if(x > 0 && y > 0 && z > 0)
-			printf("Boundary set (%d,%d,%d) = -42\n",x,y,z);
+		matrix[matrix_index(x+rim,y+rim,z+rim,mx+2*rim,my+2*rim,mz+2*rim)] = -42.0;
 	}
 }
 
@@ -102,9 +102,9 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 }
 
 __kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, size_t rim, REAL deltaX, REAL deltaY, REAL deltaZ, REAL diffDiagX, REAL diffDaigY, REAL diffDiagZ) {
-	// NOTE: mx = mx + 2*rim, same goes for my and mz!
+	// NOTE: Here mx = mx + 2*rim, same goes for my and mz!
 	
-	// Since the BiCGStab kernel is transparent for RIM cells we have to add them here.
+	// Since the BiCGStab kernel is transparent for RIM cells, we have to add them here.
 	const ssize_t x = get_global_id(0)+rim;
 	const ssize_t y = get_global_id(1)+rim;
 	const ssize_t z = get_global_id(2)+rim;

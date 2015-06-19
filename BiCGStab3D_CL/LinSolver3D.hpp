@@ -31,6 +31,8 @@ public:
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy) = 0;
+
+	virtual void test(void) = 0;
 };
 
 

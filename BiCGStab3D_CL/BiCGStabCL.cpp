@@ -53,7 +53,54 @@ using namespace flexCL;
 
 /** ==== DEBUGGIGN METHODS ===================================================================== */
 
-#if TESTING == 1
+
+//#if TESTING == 1
+
+// Some random hash function for the matrix
+double hash(NumMatrix<double, 3> &matrix) {
+	//const long brick = 107534845447;		// Random prime number (HUGE)
+
+	ssize_t _low[3];
+	ssize_t _high[3];
+	for(int i=0;i<3;i++) {
+		_low[i]   = matrix.getLow(i);
+		_high[i]  = matrix.getHigh(i);
+	}
+
+	double value = 1.0;
+
+	for(ssize_t x = _low[0]; x < _high[0]; x++) {
+		for(ssize_t y = _low[1]; y < _high[1]; y++) {
+			for(ssize_t z = _low[2]; z < _high[2]; z++) {
+				value += (x*y*z) * matrix(x,y,z);
+			}
+		}
+	}
+
+	return value;
+}
+
+double hash_cl(flexCL::CLMatrix3d *mat) {
+	Matrix3d *matrix = mat->transferToHost();
+
+	//const long brick = 107534845447;		// Random prime number (HUGE)
+
+	ssize_t rim = matrix->rim();
+	ssize_t mx[3] = { (ssize_t)matrix->mx(0), (ssize_t)matrix->mx(1), (ssize_t)matrix->mx(2) };
+
+
+	double value = 1.0;
+
+	for(ssize_t x = -rim; x < mx[0]+rim; x++) {
+		for(ssize_t y = -rim; y < mx[1]+rim; y++) {
+			for(ssize_t z = -rim; z < mx[2]+rim; z++) {
+				value += (x*y*z) * matrix->get(x,y,z);
+			}
+		}
+	}
+	delete matrix;
+	return value;
+}
 
 double dot_product(NumMatrix<double,3> &vecA, NumMatrix<double,3> &vecB) {
 	// Comput scalar product of matrix without ghost cells
@@ -152,7 +199,7 @@ void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 
 	for(ssize_t x = _low[0]; x < _high[0]; x++) {
-		int row = -_low[0];
+		int row = _low[0];
 		for(ssize_t y = _low[1]; y < _high[1]; y++) {
 			out << ++row << "\t|";
 			for(ssize_t z = _low[2]; z < _high[2]; z++) {
@@ -244,7 +291,7 @@ size_t compareMatrices(NumMatrix<double,3> mat1, CLMatrix3d* mat2, ostream &out 
 }
 
 
-#endif
+//#endif
 
 
 
@@ -469,13 +516,10 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 }
 
 void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
-	matrix->clearRim();
-	return;
-
+	//matrix->clearRim();
+	//return;
 	size_t size[3] = {matrix->mx(0), matrix->mx(1), matrix->mx(2)};
 	const size_t rim = matrix->rim();
-	const size_t cells = matrix->sizeTotal();
-	if(cells == 0) return;
 
 	this->_clKernelBoundary->setArgument(0, matrix->clMem());
 	this->_clKernelBoundary->setArgument(1, size[0]);
@@ -533,6 +577,8 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda) {
+	applyBoundary(phi);
+
 	// Initialize kernel with kernel arguments
 	this->_clKernelGenerateAx_NoSpatial->setArgument(0, phi->clMem());
 	this->_clKernelGenerateAx_NoSpatial->setArgument(1, lambda->clMem());
@@ -562,7 +608,10 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_context->join();
 	if(!this->checkMatrix(dst)) throw "generateAx_NoSpatial produces illegal values in dst";
 #endif
+
+	printFull(dst, "/home/phoenix/temp/CL_Ax_NoBc");
 	applyBoundary(dst);
+	printFull(dst, "/home/phoenix/temp/CL_Ax");
 }
 
 bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d &matrix) {
@@ -594,9 +643,6 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #if PROFILING == 1
 	unsigned long runtime = 0L;
 #endif
-
-	cout << "phi:     "; print(phi);
-	cout << "lambda:  "; print(lambda);
 
 	// Use residual as intermediate buffer
 	this->generateAx(phi, residual, lambda);
@@ -762,46 +808,69 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 		if(!this->checkMatrix(this->_matrix_residuals[0])) throw "matrix_residual check 0 failed";
 #endif
-
+		// NOTE: Tested: Residual matrices are the same.
+		//printFull(_matrix_residuals[0], "/home/phoenix/temp/CL_PRIM_RESIDUAL");
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
 
-		// cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 		// NOTE: Until here it works now :-)
+		// Note: Residuals are the same
 
 		do {
 			iterations++;
 			cout << "Starting iteration " << iterations << " ... " << endl;
+			cout << "omega = " << omega << endl;
 
 			rho0 *= -omega;
+			cout << "rho0 = " << rho0 << endl;
 
 			// ==== BI-CG PART ============================================= //
 			// cout << "BI-CG part of the solver ... " << endl;
 
+
 			for(int jj=0; jj<lValue; ++jj) {
+				cout << "jj iteration " << jj << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
-		if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
+				if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
+
+				cout << "<res[" << jj << "],res[" << jj << "]> = " << _matrix_residuals[jj]->dotProduct() << endl;
+				cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+
+
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
 				cout << "rho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
+				cout << "beta = " << beta << endl;
 
 				for(int ii=0; ii<=jj; ++ii) {
-					// XXX: Performance: Replace with add mul
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->mul(-beta);
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->add(_matrix_residuals[ii]);
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+
+
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 		if(!this->checkMatrix(this->_uMat[ii])) throw "_uMat check 2 failed";
 #endif
 				}
 
-				// u_(j+1) = A*u_j
+				// XXX HERE WE HAVE ISSUES
 				if(use_spatialDiffusion)
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 				else
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda);
+				cout << "generateAx." << endl;
+				cout << "hash(uMat[jj]) = " << hash_cl(_uMat[jj]) << endl;
+				cout << "hash(uMat[jj+1]) = " << hash_cl(_uMat[jj+1]) << endl;
+				cout << "hash(lambda) = " << hash_cl(cl_lambda) << endl;
+				exit(0);
+
+				cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << _uMat[jj+1]->dotProduct() << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_uMat[jj+1])) throw "_uMat check 3 failed";
@@ -811,6 +880,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
+				cout << "alpha = " << alpha << endl;
 
 				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
@@ -825,18 +895,29 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				} else {
 					generateAx(_matrix_residuals[jj], _matrix_residuals[jj+1], cl_lambda);
 				}
+
+
+
+				stringstream sfilename;
+				sfilename << "/home/phoenix/temp/Ax_CL_Residual_" << (jj+1);
+				string filename = sfilename.str();
+				printFull(_matrix_residuals[jj+1], filename.c_str());
+
+
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 		if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 5 failed";
 #endif
 
-				cl_phi->addMultiplied(_uMat[0], alpha);
+				_uMat[0]->mul(alpha);
+				cl_phi->add(_uMat[0]);
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
-		if(!this->checkMatrix(this->_uMat[0])) throw "_uMat check 6 failed";
+				if(!this->checkMatrix(this->_uMat[0])) throw "_uMat check 6 failed";
 #endif
 			}			// END BiCG PART
 
 			cout << "END BiCG Part. <cl_phi,cl_phi> = " << cl_phi->dotProduct() << endl;
+			exit(88);
 
 
 			// ==== MR PART ================================================ //
@@ -915,4 +996,65 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	DELETE(cl_Dyy);
 	DELETE(cl_Dzz);
 	DELETE(cl_Dxy);
+}
+
+
+/** Testing routine */
+void BiCGStabSolver::test(void) {
+	// Create test matrices
+	Matrix3d* phi;
+	Matrix3d* residuum;
+	Matrix3d* lambda;
+
+	phi       = new Matrix3d(this->mx[0], this->mx[1], this->mx[2], RIM);
+	residuum  = new Matrix3d(this->mx[0], this->mx[1], this->mx[2], RIM);
+	lambda    = new Matrix3d(this->mx[0], this->mx[1], this->mx[2], RIM);
+
+	phi->clear();
+	lambda->clear();
+
+	// Fill matrices
+	const ssize_t rim = RIM;
+	const ssize_t low_rim = -rim;
+	for(ssize_t x = low_rim; x < (ssize_t)(this->mx[0]+RIM); x++) {
+		for(ssize_t y = low_rim; y < (ssize_t)(this->mx[1]+RIM); y++) {
+			for(ssize_t z = low_rim; z < (ssize_t)(this->mx[2]+RIM); z++) {
+				double v_phi = x*y*z*0.5;
+				double v_lambda = x*y*z*0.2;
+
+				phi->set(x,y,z, v_phi);
+				lambda->set(x,y,z, v_lambda);
+			}
+		}
+	}
+	cout << "Phi and lambda initialized" << endl; cout.flush();
+	residuum->clear();
+
+
+	cout << "Transferring matrices to host ... " << endl; cout.flush();
+	CLMatrix3d *cl_phi = phi->transferToDevice(this->_context);
+	CLMatrix3d *cl_residuum = residuum->transferToDevice(this->_context);
+	CLMatrix3d *cl_lambda = lambda->transferToDevice(this->_context);
+
+	// Iterate x times
+	const int iterations = 10;
+
+	printFull(cl_phi, "/home/phoenix/temp/BiCG__Ax_Init");
+	cout << "Testing generateAx (" << iterations << " iterations) : " << endl;
+	for(int i=0;i<iterations;i++) {
+		cout << "\tAx iteration " << i << " out of " << iterations << ") ... " << endl;
+		generateAx(cl_phi, cl_residuum, cl_lambda);
+	}
+	printFull(cl_residuum, "/home/phoenix/temp/BiCG__Residuum_Exit");
+
+
+
+	delete cl_phi;
+	delete cl_residuum;
+	delete cl_lambda;
+	delete phi;
+	delete residuum;
+	delete lambda;
+	cout << "Testing complete." << endl;
+	exit(0);
 }

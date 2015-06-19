@@ -759,6 +759,7 @@ CLMatrix3d::CLMatrix3d(Context* context, size_t mx, size_t my, size_t mz, double
 	this->_profiling = false;
 	this->_lastExecutedKernel = NULL;
 	size_t size = this->sizeTotal();
+	this->_mem = NULL;
 	CLMatrix_d::aquireBuffer(sizeof(double)*size);
 	if(data != NULL)
 		this->transferToDevice(data);
