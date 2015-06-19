@@ -622,13 +622,9 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 		}
 	}
 
-	printFull(vecOut, "/home/phoenix/temp/Ax_NoBc");
-
 	if(apply_bcs) {
 		bounds.do_BCs(vecOut, 1);
 	}
-
-	printFull(vecOut, "/home/phoenix/temp/Ax");
 
 }
 
@@ -679,8 +675,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
                          NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
                          NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy) {
 
-	printFull(rhs, "/home/phoenix/temp/res_raw");
-
 	// Do boundaries if necessary for all variables:
 #ifdef parallel
 	bounds.do_BCs(Dxx, 1,-1,true);
@@ -708,7 +702,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 	resTilde = residuals[0];
 	cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
-	printFull(residuals[0], "/home/phoenix/temp/PRIM_RESIDUAL");
 
 	double norm(1.e99);
 	double rho0(1.), rho1;
@@ -756,17 +749,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 				uMat[ii] += residuals[ii];
 				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
-
-				stringstream sfilename;
-				sfilename << "/home/phoenix/temp/uMat[" << ii << "]";
-				string filename = sfilename.str();
-				printFull(uMat[ii], filename.c_str());
-
-
-				sfilename.str("");
-				sfilename << "/home/phoenix/temp/residual[" << ii << "]";
-				filename = sfilename.str();
-				printFull(residuals[ii], filename.c_str());
 			}
 
 			// cout << " uMat: " << uMat[0](3,5,0) << endl;
@@ -779,8 +761,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
 			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
 			cout << "hash(lambda) = " << hash(lambda) << endl;
-			exit(0);
-			printFull(uMat[jj+1], "/home/phoenix/temp/uMat_jj");
 
 			cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
 
@@ -802,11 +782,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			} else {
 				multiply_withMat(bounds, residuals[jj], lambda, residuals[jj+1]);
 			}
-
-			stringstream sfilename;
-			sfilename << "/home/phoenix/temp/Ax_Residual_" << (jj+1);
-			string filename = sfilename.str();
-			printFull(residuals[jj+1], filename.c_str());
 
 			phi += uMat[0]*alpha;
 

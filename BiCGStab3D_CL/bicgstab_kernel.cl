@@ -55,7 +55,7 @@ __kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz, s
 	// XXX: OpenCL Divergence in x and z direction :-(
 	bool _isBoundary = (x < 0 || y < 0 || z < 0) || (x >= mx || y >= my || z >= mz);
 	if(_isBoundary) {
-		matrix[matrix_index(x+rim,y+rim,z+rim,mx+2*rim,my+2*rim,mz+2*rim)] = -42.0;
+		matrix[matrix_index(x+rim,y+rim,z+rim,mx+2*rim,my+2*rim,mz+2*rim)] = 0.0;
 	}
 }
 

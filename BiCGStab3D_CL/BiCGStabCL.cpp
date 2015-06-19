@@ -609,9 +609,7 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	if(!this->checkMatrix(dst)) throw "generateAx_NoSpatial produces illegal values in dst";
 #endif
 
-	printFull(dst, "/home/phoenix/temp/CL_Ax_NoBc");
 	applyBoundary(dst);
-	printFull(dst, "/home/phoenix/temp/CL_Ax");
 }
 
 bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d &matrix) {
@@ -646,10 +644,6 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 
 	// Use residual as intermediate buffer
 	this->generateAx(phi, residual, lambda);
-	ofstream out;
-	out.open("/home/phoenix/temp/CL_Ax");
-	printFull(residual, out);
-	out.close();
 #if PROFILING == 1
 	runtime += _clKernelGenerateAx_NoSpatial->runtime();
 #endif
@@ -660,9 +654,6 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #endif
 
 	residual->add(rhs);
-	out.open("/home/phoenix/temp/CL_Residual");
-	printFull(residual, out);
-	out.close();
 #if PROFILING == 1
 	runtime += residual->lastKernelRuntime();
 #endif
@@ -696,8 +687,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	cout << "BiCGStabSolver::solve_int(...)" << endl;
 #endif
 	if(!isInitialized()) this->setupContext();
-
-	printFull(rhs, "/home/phoenix/temp/CL_Num_rhs");
 
 	/*
 	 * -- Problem description: --
@@ -859,7 +848,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 				}
 
-				// XXX HERE WE HAVE ISSUES
 				if(use_spatialDiffusion)
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 				else
@@ -868,7 +856,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				cout << "hash(uMat[jj]) = " << hash_cl(_uMat[jj]) << endl;
 				cout << "hash(uMat[jj+1]) = " << hash_cl(_uMat[jj+1]) << endl;
 				cout << "hash(lambda) = " << hash_cl(cl_lambda) << endl;
-				exit(0);
+				// Until here consistent with reference solution
 
 				cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << _uMat[jj+1]->dotProduct() << endl;
 
@@ -895,13 +883,6 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				} else {
 					generateAx(_matrix_residuals[jj], _matrix_residuals[jj+1], cl_lambda);
 				}
-
-
-
-				stringstream sfilename;
-				sfilename << "/home/phoenix/temp/Ax_CL_Residual_" << (jj+1);
-				string filename = sfilename.str();
-				printFull(_matrix_residuals[jj+1], filename.c_str());
 
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
