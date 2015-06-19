@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <stdlib.h>     /* exit, EXIT_FAILURE */
 #include <iomanip>
 
@@ -19,6 +20,35 @@ void print(NumMatrix<double, 3> &matrix) {
 		cout << matrix(x,y,z) << '\t';
 	}
 	cout << endl;
+}
+
+void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
+	// Print now output matrix at middle position
+	ssize_t _low[3];
+	ssize_t _high[3];
+	for(int i=0;i<3;i++) {
+		_low[i] = mat.getLow(i);
+		_high[i] = mat.getHigh(i);
+	}
+
+	for(ssize_t x = _low[0]; x < _high[0]; x++) {
+		int row = -_low[0];
+		for(ssize_t y = _low[1]; y < _high[1]; y++) {
+			out << ++row << "\t|";
+			for(ssize_t z = _low[2]; z < _high[2]; z++) {
+				out << '\t' << mat(x,y,z);
+			}
+			out << endl;
+		}
+		out << endl;
+	}
+}
+
+void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
+	ofstream out;
+	out.open(filename);
+	printFull(matrix, out);
+	out.close();
 }
 
 
@@ -286,13 +316,21 @@ void BICGStab::get_Residual(BoundaryHandler3D &bounds,
 	//! Compute residual of matrix equation
 	/*! Version with spatially constant diffusion*/
 
-	cout << "psi:     "; print(psi);
-	cout << "lambda:  "; print(lambda);
 	multiply_withMat(bounds, psi, lambda, residual, false);
-	cout << "res:     "; print(residual);
 	residual += rhs;
-	cout << "res:     "; print(residual);
 
+	/*
+	ofstream fout;
+	fout.open("/home/phoenix/temp/Ax");
+	printFull(psi, fout);
+	fout.close();
+
+	fout.open("/home/phoenix/temp/Residual");
+	printFull(residual, fout);
+	fout.close();
+	cout << "Written" << endl;
+	exit(8);
+	*/
 
 //	int mx[dim];
 //	for(int dir=0; dir<dim; ++dir) {
@@ -541,11 +579,12 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 	bounds.do_BCs(psi, 1);
 
 	if(dim==3) {
+
+
 		for(int iz = 0; iz <= mx[2]; iz++) {
 			for(int iy = 0; iy <= mx[1]; iy++) {
 				for(int ix = 0; ix <= mx[0]; ix++) {
-
-					vecOut(ix,iy,iz) = (coeff[0]*(psi(ix+1,iy,iz) +
+					const double expectedValue = (coeff[0]*(psi(ix+1,iy,iz) +
 					                              psi(ix-1,iy,iz)) +
 					                    coeff[1]*(psi(ix,iy+1,iz) +
 					                              psi(ix,iy-1,iz)) +
@@ -553,6 +592,23 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 					                              psi(ix,iy,iz-1)) -
 					                    (2.*(coeff[0] + coeff[1] +
 					                    		coeff[2]) + lambda(ix,iy,iz))*psi(ix,iy,iz));
+
+
+					double value = (coeff[0]*(psi(ix+1,iy,iz) +
+					                              psi(ix-1,iy,iz)) +
+					                    coeff[1]*(psi(ix,iy+1,iz) +
+					                              psi(ix,iy-1,iz)) +
+					                    coeff[2]*(psi(ix,iy,iz+1) +
+					                              psi(ix,iy,iz-1)));
+					value -= (2.*(coeff[0] + coeff[1] + coeff[2]) + lambda(ix,iy,iz))*psi(ix,iy,iz);
+
+					vecOut(ix,iy,iz) = value;
+
+					if(value != expectedValue) {
+						cerr << "value != expectedValue" << endl;
+						exit(5);
+					}
+
 				}
 			}
 		}
@@ -561,6 +617,7 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 	 if(apply_bcs) {
 	 	bounds.do_BCs(vecOut, 1);
 	 }
+
 }
 
 void BICGStab::add_MatTimesVec(NumMatrix<double,3> &result,
@@ -610,6 +667,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
                          NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
                          NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy) {
 
+	printFull(rhs, "/home/phoenix/temp/res_raw");
 
 	// Do boundaries if necessary for all variables:
 #ifdef parallel
@@ -639,6 +697,10 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	resTilde = residuals[0];
 
 	cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
+	print(resTilde);
+	printFull(resTilde, "/home/phoenix/temp/resTilde");
+	cout << "Written." << endl;
+	exit(9);
 
 	double norm(1.e99);
 	double rho0(1.), rho1;
@@ -662,6 +724,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		for(int jj=0; jj<LValue; ++jj) {
 
 			rho1 = dot_product(residuals[jj], resTilde);
+			cout << "rho1 = " << rho1 << endl;
 
 			double beta = alpha*rho1/rho0;
 			//			cout << " Anf: " << beta << " " << rho0 << " " << rho1 << " " << alpha << endl;

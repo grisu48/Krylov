@@ -1,6 +1,6 @@
 include $(HOME)/src/makeinclude/include.mak
 
-OFLAGS  =  $(X_OFLAGS) -Wall -fexceptions 
+OFLAGS  =  $(X_OFLAGS) -Wall -fexceptions -O0 -g
 
 CXXFLAGS = $(OFLAGS) -I.. $(X_INC) $(X_NO_AUTO_INCLUDE)
 

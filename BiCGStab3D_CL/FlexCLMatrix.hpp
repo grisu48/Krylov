@@ -20,6 +20,10 @@
 #define _FLEXCL_MATRIX_STATUS_UNINITIALIZED_ 0
 #define _FLEXCL_MATRIX_STATUS_READY_ 1
 
+//#ifndef _FLEXCL_MATRIX_BOUNDS_CHECK
+//#define _FLEXCL_MATRIX_BOUNDS_CHECK 1
+//#endif
+
 
 namespace flexCL {
 
@@ -60,6 +64,7 @@ public:
 	size_t sizeTotal(void) { return (_mx[0]+2*_rim)*(_mx[1]+2*_rim)*(_mx[2]+2*_rim); }
 	/** Size in the given dimension wihtout RIM cells */
 	size_t size(int dim) { return this->_mx[dim]; }
+	size_t mx(int dim) { return this->_mx[dim]; }
 	size_t rim() { return this->_rim; }
 
 	bool hasNanValues(bool includeRim = true);

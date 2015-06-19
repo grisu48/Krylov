@@ -11,12 +11,11 @@
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 #define REAL double
+#define ssize_t long
 #define size_t unsigned long
 
 // Range check for the matrix index. Turn off in productive code to increase performance, especially on GPU!
 #define RANGE_CHECK 0
-// Fakes the generation of AX [TEMPORARY USE ONLY]
-#define FAKE_GENERATE_AX 0
 
 
 
@@ -44,28 +43,28 @@ inline int matrix_index(int x, int y, int z, size_t mx, size_t my, size_t mz) {
 inline REAL sqr(REAL x) { return x*x; }
 
 
-__kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz) {
-	const int x = get_global_id(0);
-	const int y = get_global_id(1);
-	const int z = get_global_id(2);
+__kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz, size_t rim) {
+	// Coordinates are shifted by RIM
+	const ssize_t x = get_global_id(0) - rim;
+	const ssize_t y = get_global_id(1) - rim;
+	const ssize_t z = get_global_id(2) - rim;
 	
 	
-	// Divergence in x and z direction :-(
-	bool _isBoundary = (x <= 0 || y <= 0 || z <= 0) || (x >= mx || y >= my || z >= mz);
+	// XXX: OpenCL Divergence in x and z direction :-(
+	bool _isBoundary = (x < 0 || y < 0 || z < 0) || (x >= mx+rim || y >= my+rim || z >= mz+rim);
 	if(_isBoundary) {
-		matrix[matrix_index(x,y,z,mx,my,mz)] = 0.0;
+		matrix[matrix_index(x+rim,y+rim,z+rim,mx,my,mz)] = -42.0;
+		if(x > 0 && y > 0 && z > 0)
+			printf("Boundary set (%d,%d,%d) = -42\n",x,y,z);
 	}
 }
 
 
 
-__kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __global REAL* Dxx, __global REAL* Dyy, __global REAL* Dzz, __global REAL* Dxy, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ) {
-#if FAKE_GENERATE_AX == 1
-	return;
-#endif
-	const int x = get_global_id(0)+1;
-	const int y = get_global_id(1)+1;
-	const int z = get_global_id(2)+1;
+__kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __global REAL* Dxx, __global REAL* Dyy, __global REAL* Dzz, __global REAL* Dxy, __global REAL* dst, size_t mx, size_t my, size_t mz, size_t rim, REAL deltaX, REAL deltaY, REAL deltaZ) {
+	const int x = get_global_id(0)+rim;
+	const int y = get_global_id(1)+rim;
+	const int z = get_global_id(2)+rim;
 	const int index = matrix_index(x,y,z,mx,my,mz);
 	REAL result = 0.0;
 	
@@ -102,16 +101,15 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 	dst[index] = result;
 }
 
-__kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, REAL deltaX, REAL deltaY, REAL deltaZ, REAL diffDiagX, REAL diffDaigY, REAL diffDiagZ) {
-#if FAKE_GENERATE_AX == 1
-	return;
-#endif
-	const int x = get_global_id(0)+1;
-	const int y = get_global_id(1)+1;
-	const int z = get_global_id(2)+1;
-	const int index = matrix_index(x,y,z,mx,my,mz);
+__kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __global REAL* dst, size_t mx, size_t my, size_t mz, size_t rim, REAL deltaX, REAL deltaY, REAL deltaZ, REAL diffDiagX, REAL diffDaigY, REAL diffDiagZ) {
+	// NOTE: mx = mx + 2*rim, same goes for my and mz!
+	
+	// Since the BiCGStab kernel is transparent for RIM cells we have to add them here.
+	const ssize_t x = get_global_id(0)+rim;
+	const ssize_t y = get_global_id(1)+rim;
+	const ssize_t z = get_global_id(2)+rim;
+	const size_t index = matrix_index(x,y,z,mx,my,mz);
 	REAL result = 0.0;
-	//printf("generateAx[%2d,%2d,%2d] (%2d,%2d,%2d)\n",x,y,z,mx,my,mz);
 	
 	
 	const REAL coeff[3] = {diffDiagX/sqr(deltaX), diffDaigY/sqr(deltaY), diffDiagZ/sqr(deltaZ) };
@@ -121,8 +119,7 @@ __kernel void generateAx_NoSpatial(__global REAL* psi, __global REAL* lambda, __
 	result += coeff[1] * (psi[matrix_index(x  ,y+1,z   ,mx,my,mz)] + psi[matrix_index(x  ,y-1,z  ,mx,my,mz)]);
 	result += coeff[2] * (psi[matrix_index(x  ,   y,z+1,mx,my,mz)] + psi[matrix_index(x  ,y  ,z+1,mx,my,mz)]);
 
-	result -= ( 2.0 * (coeff[0] + coeff[1] + coeff[2] ));
-	result += lambda[index] * psi[index];
+	result -= ( 2.0 * (coeff[0] + coeff[1] + coeff[2] ) + lambda[index]) * psi[index];
 	
 	// Done
 	dst[index] = result;

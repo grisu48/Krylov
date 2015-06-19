@@ -808,10 +808,21 @@ void CLMatrix3d::transferToDevice(Matrix3d *matrix, bool blocking) {
 }
 
 void CLMatrix3d::boundsCheck(CLMatrix3d *matrix) {
-	if(matrix->_mx[0] != this->_mx[0]) throw OpenCLException("CLMatrix bound check failed (mx[0])");
-	if(matrix->_mx[1] != this->_mx[1]) throw OpenCLException("CLMatrix bound check failed (mx[1])");
-	if(matrix->_mx[2] != this->_mx[2]) throw OpenCLException("CLMatrix bound check failed (mx[2])");
-	if(matrix->_rim != this->_rim) throw OpenCLException("CLMatrix bound check failed (rim)");
+	try {
+		if(matrix->_mx[0] != this->_mx[0]) throw OpenCLException("CLMatrix bound check failed (mx[0])");
+		if(matrix->_mx[1] != this->_mx[1]) throw OpenCLException("CLMatrix bound check failed (mx[1])");
+		if(matrix->_mx[2] != this->_mx[2]) throw OpenCLException("CLMatrix bound check failed (mx[2])");
+		if(matrix->_rim != this->_rim) throw OpenCLException("CLMatrix bound check failed (rim)");
+	} catch (...) {
+		cout.flush();
+		cerr << "Matrix bounds check failed: ";
+		cerr << "(" << matrix->_mx[0] << "," << matrix->_mx[1] << "," << matrix->_mx[2] << ")";
+		cerr << " != ";
+		cerr << "(" << this->_mx[0] << "," << this->_mx[1] << "," << this->_mx[2] << ")";
+		cerr << endl;
+		cerr.flush();
+		throw;
+	}
 }
 
 void CLMatrix3d::boundsCheck(Matrix3d *matrix) {

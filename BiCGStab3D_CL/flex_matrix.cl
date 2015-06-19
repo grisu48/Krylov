@@ -27,7 +27,7 @@
 // Index of a matrix element. (x,y,z) are the desired coodrinates,
 // mx is the size of the matrix
 inline size_t matrix_index_3d(int x, int y, int z, size_t rim) {
-	// TOTAL size
+	// TOTAL size. THIS IS POTENTIALLY DANGEROUS!!
 	const size_t mx = get_global_size(0);
 	const size_t my = get_global_size(1);
 	

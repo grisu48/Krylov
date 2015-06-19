@@ -7,6 +7,7 @@
 
 #include "BiCGStabCL.hpp"
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 
 
@@ -50,80 +51,31 @@ using namespace std;
 using namespace flexCL;
 
 
-double dot_product(NumMatrix<double,3> &vecA, NumMatrix<double,3> &vecB) {
-	const int dim = 3;
+/** ==== DEBUGGIGN METHODS ===================================================================== */
 
-	//! Compute the scalar product of two quantities
-	int mx[dim];
-	for(int dir=0; dir<dim; ++dir) {
-		mx[dir] = vecA.getHigh(dir)-1;
+#if TESTING == 1
+
+double dot_product(NumMatrix<double,3> &vecA, NumMatrix<double,3> &vecB) {
+	// Comput scalar product of matrix without ghost cells
+	const size_t rim = RIM;
+	size_t size[3];
+	for(int i=0;i<3;i++) {
+		if (vecA.getLow(i) != -rim) throw "dotProduct - RIM field mismatch of NumMatrix A";
+		if (vecB.getLow(i) != -rim) throw "dotProduct - RIM field mismatch of NumMatrix B";
+
+		size[i] = vecA.getHigh(i) - rim;
+		if(vecB.getHigh(i)-rim != size[i]) throw "dotProduct - vecB.size mismatch with vecA";
 	}
 
-	double result=0.;
+	double result = 0.0;
 
-
-	for(int iz = 1; iz < mx[2]; iz += 1) {
-		for(int iy = 1; iy < mx[1]; iy += 1) {
-			for(int ix = 1; ix < mx[0]; ix += 1) {
-				result += vecA(ix,iy,iz)*vecB(ix,iy,iz);
+	for(size_t x = 0; x < size[0]; x++) {
+		for(size_t y = 0; y < size[1]; y++) {
+			for(size_t z = 0; z < size[2]; z++) {
+				result += vecA(x,y,z) * vecB(x,y,z);
 			}
 		}
 	}
-
-	// Now add boundary values
-	// at x-boundaries
-	for(int iz = 1; iz < mx[2]; iz += 1) {
-		for(int iy = 1; iy < mx[1]; iy += 1) {
-			result +=  vecA(0,iy,iz)*vecB(0,iy,iz);
-			result +=  vecA(mx[0],iy,iz)*vecB(mx[0],iy,iz);
-		}
-	}
-	// at y-boundaries
-	for(int iz = 1; iz < mx[2]; iz += 1) {
-		for(int ix = 1; ix < mx[0]; ix += 1) {
-			result += vecA(ix,0,iz)*vecB(ix,0,iz);
-			result += vecA(ix,mx[1],iz)*vecB(ix,mx[1],iz);
-		}
-	}
-	// at z-boundaries:
-	for(int iy = 1; iy < mx[1]; iy += 1) {
-		for(int ix = 1; ix < mx[0]; ix += 1) {
-			result += vecA(ix,iy,0)*vecB(ix,iy,0);
-			result += vecA(ix,iy,mx[2])*vecB(ix,iy,mx[2]);
-		}
-	}
-
-	// Now add boundary values with weight
-	for(int iz = 1; iz < mx[2]; iz += 1) {
-		result += vecA(0,0,iz)*vecB(0,0,iz);
-		result += vecA(mx[0],0,iz)*vecB(mx[0],0,iz);
-		result += vecA(0,mx[1],iz)*vecB(0,mx[1],iz);
-		result += vecA(mx[0],mx[1],iz)*vecB(mx[0],mx[1],iz);
-	}
-
-	for(int iy = 1; iy < mx[1]; iy += 1) {
-		result += vecA(0,iy,0)*vecB(0,iy,0);
-		result += vecA(mx[0],iy,0)*vecB(mx[0],iy,0);
-		result += vecA(0,iy,mx[2])*vecB(0,iy,mx[2]);
-		result += vecA(mx[0],iy,mx[2])*vecB(mx[0],iy,mx[2]);
-	}
-
-	for(int ix = 1; ix < mx[0]; ix += 1) {
-		result += vecA(ix,0,0)*vecB(ix,0,0);
-		result += vecA(ix,mx[1],0)*vecB(ix,mx[1],0);
-		result += vecA(ix,0,mx[2])*vecB(ix,0,mx[2]);
-		result += vecA(ix,mx[1],mx[2])*vecB(ix,mx[1],mx[2]);
-	}
-
-	// Finally add boundary values with weight 1/8
-	result += vecA(0,0,0)*vecB(0,0,0);
-	result += vecA(mx[0],0,0)*vecB(mx[0],0,0);
-	result += vecA(0,mx[1],0)*vecB(0,mx[1],0);
-	result += vecA(mx[0],mx[1],0)*vecB(mx[0],mx[1],0);
-	result += vecA(0,0,mx[2])*vecB(0,0,mx[2]);
-	result += vecA(mx[0],0,mx[2])*vecB(mx[0],0,mx[2]);
-	result += vecA(0,mx[1],mx[2])*vecB(0,mx[1],mx[2]);
-	result += vecA(mx[0],mx[1],mx[2])*vecB(mx[0],mx[1],mx[2]);
 	return result;
 }
 
@@ -163,68 +115,84 @@ void print(flexCL::CLMatrix3d *matrix) {
 	delete matLocal;
 }
 
-#if 0
-
-/**
- * Print slice of the matrix as z/2
- */
-void print(NumMatrix<double,3> &matrix) {
-	ssize_t mx[3];
-	ssize_t low[3];
-	ssize_t high[3];
-	for(int i=0;i<3;i++) {
-		low[i] = matrix.getLow(i);
-		high[i] = matrix.getHigh(i);
-		mx[i] = high[i] - low[i];
-	}
-
-	// Print slice at z/2
-	const int z = mx[2]/2;
-	int row = 0;
-	for(ssize_t x = low[0]; x <= high[0]; x++) {
-		cout << setw(4) << ++row << "|\t";
-		for(ssize_t y = low[1]; y <= high[1]; y++) {
-			cout << '\t' << setw(8) << matrix(x,y,z);
-			//cout << "matrix[" << x << "," << y << "," << z << "] = " << matrix(x,y,z) << endl;
-		}
-
-		cout << endl;
-	}
-}
-
-
-/**
- * Print slice of the matrix as z/2
- */
-void print(CLMatrix3d *matrix) {
-	ssize_t mx[3];
+void printFull(flexCL::Matrix3d *matrix, ostream &out = cout) {
+	ssize_t mz = matrix->mx(2);
+	ssize_t my = matrix->mx(1);
+	ssize_t mx = matrix->mx(0);
 	ssize_t rim = matrix->rim();
-	for(int i=0;i<3;i++) mx[i] = matrix->mx(i);
-	// const size_t rim = matrix->rim();
 
-	Matrix3d *locMatrix = matrix->transferToHost();
-
-	// Print slice at z/2
-	const int z = mx[2]/2;
-	int row = 0;
-	for(ssize_t x = -rim; x < mx[0]+rim ; x++) {
-		cout << setw(4) << ++row << "|\t";
-		for(ssize_t y = -rim; y < mx[1]+rim ; y++) {
-			cout << '\t' << setw(8) << locMatrix->get(x,y,z);
+	for(ssize_t x = -rim; x < mx+rim; x++) {
+		int row = -rim;
+		for(ssize_t y = -rim; y < my+rim; y++) {
+			out << ++row << "\t|";
+			for(ssize_t z = -rim; z < mz+rim; z++) {
+				out << '\t' << matrix->get(x,y,z);
+			}
+			out << endl;
 		}
-		cout << endl;
+		out << endl;
 	}
-
-	delete locMatrix;
-
 }
 
-/**
- * Print slice of the matrix as z/2
- */
-inline void print(CLMatrix3d &matrix) { print(&matrix); }
+void printFull(flexCL::CLMatrix3d *matrix, ostream &out = cout) {
+	// Print now output matrix at middle position
 
-#endif
+	Matrix3d *matLocal = matrix->transferToHost();
+	printFull(matLocal, out);
+	delete matLocal;
+}
+
+void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
+	// Print now output matrix at middle position
+	ssize_t _low[3];
+	ssize_t _high[3];
+	for(int i=0;i<3;i++) {
+		_low[i] = mat.getLow(i);
+		_high[i] = mat.getHigh(i);
+	}
+
+	for(ssize_t x = _low[0]; x < _high[0]; x++) {
+		int row = -_low[0];
+		for(ssize_t y = _low[1]; y < _high[1]; y++) {
+			out << ++row << "\t|";
+			for(ssize_t z = _low[2]; z < _high[2]; z++) {
+				out << '\t' << mat(x,y,z);
+			}
+			out << endl;
+		}
+		out << endl;
+	}
+}
+
+void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
+	ofstream out;
+	out.open(filename);
+	printFull(matrix, out);
+	out.close();
+}
+
+void printFull(flexCL::CLMatrix3d *matrix, const char* filename) {
+	ofstream out;
+	out.open(filename);
+	printFull(matrix, out);
+	out.close();
+}
+
+void printFull(flexCL::CLMatrix3d &matrix, const char* filename) {
+	printFull(&matrix, filename);
+}
+
+void printFull(flexCL::Matrix3d *matrix, const char* filename) {
+	ofstream out;
+	out.open(filename);
+	printFull(matrix, out);
+	out.close();
+}
+
+void printFull(flexCL::Matrix3d &matrix, const char* filename) {
+	printFull(&matrix, filename);
+}
+
 
 bool compareMatrixSize(NumMatrix<double,3> &matA, NumMatrix<double,3> &matB) {
 	for(int i=0;i<3;i++) {
@@ -276,6 +244,19 @@ size_t compareMatrices(NumMatrix<double,3> mat1, CLMatrix3d* mat2, ostream &out 
 }
 
 
+#endif
+
+
+
+
+
+
+
+
+
+/* ==== ACTUAL BICGSTAB SOLVER SECTION ========================================================= */
+
+
 BiCGStabSolver::BiCGStabSolver(grid_manager &grid, double tolerance, int lValue, flexCL::Context* context) {
 	this->_context = context;
 	this->status = _STATUS_UNINITIALIZED;
@@ -325,14 +306,14 @@ void BiCGStabSolver::setupContext(void) {
 	this->_context->createProfilingCommandQueue();
 #endif
 
-	const size_t mx = (size_t)this->mx[0]+2;
-	const size_t my = (size_t)this->mx[1]+2;
-	const size_t mz = (size_t)this->mx[2]+2;
+	const size_t mx = (size_t)this->mx[0];
+	const size_t my = (size_t)this->mx[1];
+	const size_t mz = (size_t)this->mx[2];
 
-	this->_matrix_rhs = new CLMatrix3d(this->_context, mx,my,mz);
+	this->_matrix_rhs = new CLMatrix3d(this->_context, mx,my,mz, NULL, RIM);
 	this->_matrix_rhs->initializeContext();
 	this->_matrix_rhs->clear();
-	this->_matrix_lambda = new CLMatrix3d(this->_context, mx,my,mz);
+	this->_matrix_lambda = new CLMatrix3d(this->_context, mx,my,mz, NULL, RIM);
 	this->_matrix_lambda->initializeContext();
 	this->_matrix_lambda->clear();
 
@@ -340,7 +321,7 @@ void BiCGStabSolver::setupContext(void) {
 	this->_uMat = new CLMatrix3d*[this->lValue+1];
 	for(int i=0;i<this->lValue+1;i++) {
 		this->_matrix_residuals[i] = new CLMatrix3d(this->_context, mx,my,mz, NULL, RIM);
-		this->_uMat[i] = new CLMatrix3d(this->_context, mx,my,mz);
+		this->_uMat[i] = new CLMatrix3d(this->_context, mx,my,mz, NULL, RIM);
 
 		this->_matrix_residuals[i]->initializeContext();
 		this->_uMat[i]->initializeContext();
@@ -417,6 +398,12 @@ void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 
 // XXX: Remove parameter size
 static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix, CLMatrix3d *copyContextFrom, size_t* size) {
+	// =================================================
+	// * Transfer tested. 2015-06-19
+	// Considered: Done
+	// =================================================
+
+
 	const ssize_t rim = RIM;		// Number of ghost cells
 	ssize_t _size[3];
 	ssize_t _low[3];
@@ -425,7 +412,11 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 	for(int i=0;i<3;i++) {
 		_low[i] = matrix.getLow(i);
 		_high[i] = matrix.getHigh(i);
-		_size[i] = _high[i] - _low[i];
+		_size[i] = _high[i] - _low[i]-2*rim;
+
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+		if( -_low[i] != rim) throw OpenCLException("transferMatrix - NumMatrix RIM field mismatch");
+#endif
 	}
 
 	// +2 because we want at least 1 ghost cell in each dimension
@@ -434,8 +425,8 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 	temp.clear();
 
 	// Copy the whole matrix
-	for(ssize_t ix=_low[0]; ix<_high[0]; ix++)
-		for(ssize_t iy=_low[1]; iy<_high[1]; iy++)
+	for(ssize_t ix=_low[0]; ix<_high[0]; ix++) {
+		for(ssize_t iy=_low[1]; iy<_high[1]; iy++) {
 			for(ssize_t iz=_low[2]; iz<_high[2]; iz++) {
 				const double value = matrix(ix,iy,iz);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -444,7 +435,8 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 #endif
 				temp.set(ix,iy,iz, value);
 			}
-
+		}
+	}
 
 	CLMatrix3d* result = temp.transferToDevice(context);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -452,8 +444,8 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 	// Transfer back to host and check the two matrices
 	Matrix3d* copy = result->transferToHost();
 	size_t deltaCells = copy->compare(temp, true);
-
 	delete copy;
+
 	if(deltaCells > 0) {
 		cerr << "transferring matrix to device: " << deltaCells << " cells varying !! " << endl;
 		throw NumException("Transfer to device failed (deltaCells > 0)");
@@ -477,17 +469,31 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 }
 
 void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
-	size_t size[3] = {matrix->mx(0),matrix->mx(1), matrix->mx(2)};
+	matrix->clearRim();
+	return;
+
+	size_t size[3] = {matrix->mx(0), matrix->mx(1), matrix->mx(2)};
 	const size_t rim = matrix->rim();
+	const size_t cells = matrix->sizeTotal();
+	if(cells == 0) return;
 
 	this->_clKernelBoundary->setArgument(0, matrix->clMem());
-	this->_clKernelBoundary->setArgument(1, size[0]+rim);
-	this->_clKernelBoundary->setArgument(2, size[0]+rim);
-	this->_clKernelBoundary->setArgument(3, size[0]+rim);
+	this->_clKernelBoundary->setArgument(1, size[0]);
+	this->_clKernelBoundary->setArgument(2, size[1]);
+	this->_clKernelBoundary->setArgument(3, size[2]);
+	this->_clKernelBoundary->setArgument(4, rim);
+#if PROFILING == 1
 	cerr << "applyBoundary ... "; cerr.flush();
-	this->_clKernelBoundary->enqueueNDRange(size[0]+2*rim, size[1]+2*rim, size[2]+2*rim);
+#endif
+
+	size_t tot_size[3] = {size[0]+2*rim, size[1]+2*rim, size[2]+2*rim };
+
+	this->_clKernelBoundary->enqueueNDRange(tot_size[0], tot_size[1], tot_size[2]);
+#if PROFILING == 1
 	this->_context->join();
-	cerr << "done" << endl; cerr.flush();
+	const unsigned long runtime_ms = this->_clKernelBoundary->runtime() * 1e-6;
+	cerr << "done (" << runtime_ms << " ms)" << endl; cerr.flush();
+#endif
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 	this->_context->join();
@@ -503,14 +509,14 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_clKernelGenerateAx_Full->setArgument(4, Dzz->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(5, Dxy->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(6, dst->clMem());
-
-	this->_clKernelGenerateAx_Full->setArgument(7, this->mx[0]+2);
-	this->_clKernelGenerateAx_Full->setArgument(8, this->mx[1]+2);
-	this->_clKernelGenerateAx_Full->setArgument(9, this->mx[2]+2);
-
-	this->_clKernelGenerateAx_Full->setArgument(10, this->deltaX[0]);
-	this->_clKernelGenerateAx_Full->setArgument(11, this->deltaX[1]);
-	this->_clKernelGenerateAx_Full->setArgument(12, this->deltaX[2]);
+	// bicstab_kernel calculates with full matrix size
+	this->_clKernelGenerateAx_Full->setArgument(7, this->mx[0]+2*RIM);
+	this->_clKernelGenerateAx_Full->setArgument(8, this->mx[1]+2*RIM);
+	this->_clKernelGenerateAx_Full->setArgument(9, this->mx[2]+2*RIM);
+	this->_clKernelGenerateAx_Full->setArgument(10, (size_t)RIM);
+	this->_clKernelGenerateAx_Full->setArgument(11, this->deltaX[0]);
+	this->_clKernelGenerateAx_Full->setArgument(12, this->deltaX[1]);
+	this->_clKernelGenerateAx_Full->setArgument(13, this->deltaX[2]);
 
 	this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
 
@@ -523,29 +529,29 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_context->join();
 	if(!this->checkMatrix(dst)) throw "generateAx_Full produces illegal values in dst";
 #endif
-
 	applyBoundary(dst);
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda) {
+	// Initialize kernel with kernel arguments
 	this->_clKernelGenerateAx_NoSpatial->setArgument(0, phi->clMem());
 	this->_clKernelGenerateAx_NoSpatial->setArgument(1, lambda->clMem());
 	this->_clKernelGenerateAx_NoSpatial->setArgument(2, dst->clMem());
+	// bicstab_kernel calculates with full matrix size
+	this->_clKernelGenerateAx_NoSpatial->setArgument(3, this->mx[0]+2*RIM);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(4, this->mx[1]+2*RIM);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(5, this->mx[2]+2*RIM);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(6, (size_t)RIM);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(7, this->deltaX[0]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(8, this->deltaX[1]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(9, this->deltaX[2]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(10, this->diffDiag[0]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(11, this->diffDiag[1]);
+	this->_clKernelGenerateAx_NoSpatial->setArgument(12, this->diffDiag[2]);
 
-	this->_clKernelGenerateAx_NoSpatial->setArgument(3, this->mx[0]+2);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(4, this->mx[1]+2);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(5, this->mx[2]+2);
-
-	this->_clKernelGenerateAx_NoSpatial->setArgument(6, this->deltaX[0]);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(7, this->deltaX[1]);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(8, this->deltaX[2]);
-
-	this->_clKernelGenerateAx_NoSpatial->setArgument(9, this->diffDiag[0]);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(10, this->diffDiag[1]);
-	this->_clKernelGenerateAx_NoSpatial->setArgument(11, this->diffDiag[2]);
-
-	// When enqueueing use only mx without ghost cells!
+	// (!!) When enqueueing use only mx without ghost cells!
 	this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
+	// WRONG: this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0]+2*RIM, this->mx[1]+2*RIM, this->mx[2]+2*RIM);
 
 #if PROFILING == 1
 	this->_context->join();
@@ -557,9 +563,6 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	if(!this->checkMatrix(dst)) throw "generateAx_NoSpatial produces illegal values in dst";
 #endif
 	applyBoundary(dst);
-
-
-
 }
 
 bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d &matrix) {
@@ -594,9 +597,13 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 
 	cout << "phi:     "; print(phi);
 	cout << "lambda:  "; print(lambda);
+
 	// Use residual as intermediate buffer
 	this->generateAx(phi, residual, lambda);
-	cout << "res:     "; print(residual);
+	ofstream out;
+	out.open("/home/phoenix/temp/CL_Ax");
+	printFull(residual, out);
+	out.close();
 #if PROFILING == 1
 	runtime += _clKernelGenerateAx_NoSpatial->runtime();
 #endif
@@ -607,14 +614,15 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #endif
 
 	residual->add(rhs);
-	cout << "res:     "; print(residual);
+	out.open("/home/phoenix/temp/CL_Residual");
+	printFull(residual, out);
+	out.close();
 #if PROFILING == 1
 	runtime += residual->lastKernelRuntime();
 #endif
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 	if(!checkMatrix(residual))  throw "generateAx(residual->add) - checkMatrix(residual) failed";
 #endif
-	applyBoundary(residual);
 #if PROFILING == 1
 	runtime += this->_clKernelBoundary->runtime();
 #endif
@@ -626,6 +634,8 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 	this->_context->join();
 	cerr << "PROFILING: calculated Residual (" << (runtime*1e-6) << " ms)" << endl;
 #endif
+
+	applyBoundary(residual);
 }
 
 void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
@@ -640,6 +650,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	cout << "BiCGStabSolver::solve_int(...)" << endl;
 #endif
 	if(!isInitialized()) this->setupContext();
+
+	printFull(rhs, "/home/phoenix/temp/CL_Num_rhs");
 
 	/*
 	 * -- Problem description: --
@@ -753,8 +765,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
-		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
-		exit(EXIT_FAILURE);
+
+		// cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		// NOTE: Until here it works now :-)
 
 		do {
 			iterations++;
@@ -771,6 +784,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
+				cout << "rho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
 
@@ -822,6 +836,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 			}			// END BiCG PART
 
+			cout << "END BiCG Part. <cl_phi,cl_phi> = " << cl_phi->dotProduct() << endl;
+
 
 			// ==== MR PART ================================================ //
 			// cout << "MR part of the solver ... " << endl;
@@ -838,7 +854,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 			_gamma[lValue] = gammap[lValue];
 			omega = _gamma[lValue];
-			cout << omega << endl;
+			cout << "\tOmega = " << omega << endl;
 
 			for(int jj=lValue-1; jj>=1; --jj) {
 				_gamma[jj] = gammap[jj];

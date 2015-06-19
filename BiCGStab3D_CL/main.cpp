@@ -171,10 +171,6 @@ int main(int argc, char** argv) {
 	diffTens[1].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	diffTens[2].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 	diffTens[3].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
-	diff(0) = 1.;
-	diff(1) = 1.;
-	diff(2) = 100.;
-	diff(2) = 10.;
 
 
 	// Setting grid values
@@ -183,6 +179,10 @@ int main(int argc, char** argv) {
 		diffTens[1].set_constVal(1.0);
 		diffTens[2].set_constVal(1.0);
 		diffTens[3].clear();
+		diff(0) = 1.0;
+		diff(1) = 1.0;
+		diff(2) = 100.0;
+		diff(2) = 10.0;
 		phi_exact.clear();
 		lambda.clear();
 		phi.clear();
