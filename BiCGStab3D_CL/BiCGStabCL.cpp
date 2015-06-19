@@ -211,29 +211,37 @@ void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 }
 
+inline std::string f_filename(const char* filename) {
+	std::string result = "/home/phoenix/temp/" + std::string(filename);
+	return result;
+}
+
 void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
 	ofstream out;
-	out.open(filename);
+	std::string fname = f_filename(filename);
+	out.open(fname.c_str());
 	printFull(matrix, out);
 	out.close();
 }
 
 void printFull(flexCL::CLMatrix3d *matrix, const char* filename) {
 	ofstream out;
-	out.open(filename);
+	std::string fname = f_filename(filename);
+	out.open(fname.c_str());
+	printFull(matrix, out);
+	out.close();
+}
+
+void printFull(flexCL::Matrix3d *matrix, const char* filename) {
+	ofstream out;
+	std::string fname = f_filename(filename);
+	out.open(fname.c_str());
 	printFull(matrix, out);
 	out.close();
 }
 
 void printFull(flexCL::CLMatrix3d &matrix, const char* filename) {
 	printFull(&matrix, filename);
-}
-
-void printFull(flexCL::Matrix3d *matrix, const char* filename) {
-	ofstream out;
-	out.open(filename);
-	printFull(matrix, out);
-	out.close();
 }
 
 void printFull(flexCL::Matrix3d &matrix, const char* filename) {
@@ -546,6 +554,8 @@ void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
+	applyBoundary(phi);
+
 	this->_clKernelGenerateAx_Full->setArgument(0, phi->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(1, lambda->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(2, Dxx->clMem());
@@ -798,7 +808,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		if(!this->checkMatrix(this->_matrix_residuals[0])) throw "matrix_residual check 0 failed";
 #endif
 		// NOTE: Tested: Residual matrices are the same.
-		//printFull(_matrix_residuals[0], "/home/phoenix/temp/CL_PRIM_RESIDUAL");
+		//printFull(_matrix_residuals[0], "CL_PRIM_RESIDUAL");
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
 
@@ -825,15 +835,15 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
 
-				cout << "<res[" << jj << "],res[" << jj << "]> = " << _matrix_residuals[jj]->dotProduct() << endl;
-				cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+				cout << "\t<res[" << jj << "],res[" << jj << "]> = " << _matrix_residuals[jj]->dotProduct() << endl;
+				cout << "\t<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 
 
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
-				cout << "rho1 = " << rho1 << endl;
+				cout << "\trho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
-				cout << "beta = " << beta << endl;
+				cout << "\tbeta = " << beta << endl;
 
 				for(int ii=0; ii<=jj; ++ii) {
 					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
@@ -852,13 +862,21 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 				else
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda);
-				cout << "generateAx." << endl;
-				cout << "hash(uMat[jj]) = " << hash_cl(_uMat[jj]) << endl;
-				cout << "hash(uMat[jj+1]) = " << hash_cl(_uMat[jj+1]) << endl;
-				cout << "hash(lambda) = " << hash_cl(cl_lambda) << endl;
+				// Checked: Input parameters are the same (uMat, lambda)
+				// PROBLEM: generateAx produced a different OUTPUT
+
+				cout << "\tgenerateAx." << endl;
+				printFull(_uMat[jj], "CL_uMat");
+				printFull(cl_lambda, "CL_Lambda");
+				printFull(_uMat[jj+1], "CL_Ax");
+
+
+				cout << "\thash(uMat[jj]) = " << hash_cl(_uMat[jj]) << endl;
+				cout << "\thash(uMat[jj+1]) = " << hash_cl(_uMat[jj+1]) << endl;
+				cout << "\thash(lambda) = " << hash_cl(cl_lambda) << endl;
 				// Until here consistent with reference solution
 
-				cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << _uMat[jj+1]->dotProduct() << endl;
+				cout << "\t<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << _uMat[jj+1]->dotProduct() << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_uMat[jj+1])) throw "_uMat check 3 failed";
@@ -868,7 +886,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
-				cout << "alpha = " << alpha << endl;
+				cout << "\talpha = " << alpha << endl;
 
 				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
@@ -889,12 +907,13 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 5 failed";
 #endif
 
-				_uMat[0]->mul(alpha);
-				cl_phi->add(_uMat[0]);
+				cl_phi->addMultiplied(_uMat[0], alpha);
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_uMat[0])) throw "_uMat check 6 failed";
 #endif
+
+				cout << "End jj iteration " << jj << " - hash(cl_phi) = " << hash_cl(cl_phi) << endl;
 			}			// END BiCG PART
 
 			cout << "END BiCG Part. <cl_phi,cl_phi> = " << cl_phi->dotProduct() << endl;
@@ -1020,13 +1039,12 @@ void BiCGStabSolver::test(void) {
 	// Iterate x times
 	const int iterations = 10;
 
-	printFull(cl_phi, "/home/phoenix/temp/BiCG__Ax_Init");
+
 	cout << "Testing generateAx (" << iterations << " iterations) : " << endl;
 	for(int i=0;i<iterations;i++) {
 		cout << "\tAx iteration " << i << " out of " << iterations << ") ... " << endl;
 		generateAx(cl_phi, cl_residuum, cl_lambda);
 	}
-	printFull(cl_residuum, "/home/phoenix/temp/BiCG__Residuum_Exit");
 
 
 

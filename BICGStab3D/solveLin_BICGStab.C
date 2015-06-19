@@ -69,9 +69,17 @@ void printFull(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 }
 
+
+
+inline std::string f_filename(const char* filename) {
+	std::string result = "/home/phoenix/temp/" + std::string(filename);
+	return result;
+}
+
 void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
 	ofstream out;
-	out.open(filename);
+	string fname = f_filename(filename);
+	out.open(fname.c_str());;
 	printFull(matrix, out);
 	out.close();
 }
@@ -758,6 +766,12 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 				multiply_withMat(bounds, uMat[jj], lambda, uMat[jj+1]);
 			}
 			cout << "multiply_withMat." << endl;
+			printFull(uMat[jj+1], "Ax");
+			printFull(uMat[jj], "uMat");
+			printFull(lambda, "Lambda");
+			exit(0);
+
+
 			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
 			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
 			cout << "hash(lambda) = " << hash(lambda) << endl;
@@ -785,6 +799,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 			phi += uMat[0]*alpha;
 
+			cout << "End jj iteration " << jj << " - hash(phi) = " << hash(phi) << endl;
 		}
 
 		cout << "alpha = " << alpha << endl;
