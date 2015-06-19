@@ -724,39 +724,39 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		iter_steps++;
 		//		if(iter_steps==15) exit(3);
 		if(rank==0 && debug>2) {
-			cout << " Iterations done " << iter_steps << endl;
+			cout << " Iteration: " << iter_steps << endl;
 		}
 
-		cout << "omega = " << omega << endl;
+		//cout << "omega = " << omega << endl;
 		rho0 *= -omega;
-		cout << "rho0 = " << rho0 << endl;
+		//cout << "rho0 = " << rho0 << endl;
 
 
 
 
 		// BI-CG part:
 		for(int jj=0; jj<LValue; ++jj) {
-			cout << "jj iteration " << jj << endl;
+			//cout << "jj iteration " << jj << endl;
 
-			cout << "<res[" << jj << "],res[" << jj << "]> = " << dot_product(residuals[jj], residuals[jj]) << endl;
-			cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
+			//cout << "<res[" << jj << "],res[" << jj << "]> = " << dot_product(residuals[jj], residuals[jj]) << endl;
+			//cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
 
 			rho1 = dot_product(residuals[jj], resTilde);
-			cout << "rho1 = " << rho1 << endl;
+			//cout << "rho1 = " << rho1 << endl;
 
 			double beta = alpha*rho1/rho0;
-			cout << "beta = " << beta << endl;
+			//cout << "beta = " << beta << endl;
 			//			cout << " Anf: " << beta << " " << rho0 << " " << rho1 << " " << alpha << endl;
 			//			cout << " Some vals " << residuals[jj](3,5,9) << " " << resTilde(3,5,9) << endl;
 			rho0 = rho1;
 
 			// \hat u_i = \hat r_i - \beta \hat u_i
 			for(int ii=0; ii<=jj; ++ii) {
-				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
+				//cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 				uMat[ii] *= -beta;
-				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
+				//cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 				uMat[ii] += residuals[ii];
-				cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
+				//cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 			}
 
 			// cout << " uMat: " << uMat[0](3,5,0) << endl;
@@ -765,21 +765,16 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			} else {
 				multiply_withMat(bounds, uMat[jj], lambda, uMat[jj+1]);
 			}
-			cout << "multiply_withMat." << endl;
-			printFull(uMat[jj+1], "Ax");
-			printFull(uMat[jj], "uMat");
-			printFull(lambda, "Lambda");
-			exit(0);
 
 
-			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
-			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
-			cout << "hash(lambda) = " << hash(lambda) << endl;
+			//cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
+			//cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
+			//cout << "hash(lambda) = " << hash(lambda) << endl;
 
-			cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
+			//cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
 
 			alpha = rho0/dot_product(uMat[jj+1], resTilde);
-			cout << "alpha = " << alpha << endl;
+			//cout << "alpha = " << alpha << endl;
 			// cout << " rho " << alpha << " " << rho0 << " " << dot_product(uMat[jj+1], resTilde) << endl;
 			// cout << " Beta " << beta << " " << rho1 << endl;
 
@@ -799,12 +794,11 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 			phi += uMat[0]*alpha;
 
-			cout << "End jj iteration " << jj << " - hash(phi) = " << hash(phi) << endl;
+			//cout << "End jj iteration " << jj << " - hash(phi) = " << hash(phi) << endl;
 		}
 
-		cout << "alpha = " << alpha << endl;
-		cout << "<phi, phi> = " << dot_product(phi, phi) << endl;
-		exit(8);
+		//cout << "alpha = " << alpha << endl;
+		//cout << "<phi, phi> = " << dot_product(phi, phi) << endl;
 
 		// if(iter_steps==1) exit(3);
 
@@ -822,8 +816,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 		}
 		omega = gamma[LValue] = gammap[LValue];
-		// cout << " omega " << omega << endl;
-		// exit(3);
+		//cout << " omega " << omega << endl;
 
 		for(int jj=LValue-1; jj>=1; --jj) {
 			gamma[jj] = gammap[jj];
@@ -845,6 +838,10 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		residuals[0] -= residuals[LValue]*gammap[LValue];
 		uMat[0] -= uMat[LValue]*gamma[LValue];
 
+		//cout << "uMat[0].hash = " << hash(uMat[0]) << endl;
+		//cout << "res[0].hash = " << hash(residuals[0]) << endl;
+
+
 		for(int jj=1; jj<LValue; ++jj) {
 			uMat[0] -= uMat[jj]*gamma[jj];
 			phi     += residuals[jj]*gammapp[jj];
@@ -856,6 +853,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			std::cout << " My error norm: " << norm << " ";
 			std::cout << sqrt(norm) << " " << eps*normRHS << std::endl;
 		}
+
 
 	} while (norm > eps*normRHS);
 

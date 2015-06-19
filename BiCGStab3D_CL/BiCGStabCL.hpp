@@ -12,7 +12,7 @@
 
 // Additional checks in the BiCGStab solver used for debugging
 #ifndef BICGSTAB_SOLVER_ADDITIONAL_CHECKS
-#define BICGSTAB_SOLVER_ADDITIONAL_CHECKS 1
+#define BICGSTAB_SOLVER_ADDITIONAL_CHECKS 0
 #endif
 
 
@@ -57,7 +57,7 @@ protected:
 	/** Status code of the current solver*/
 	int status = 0;
 
-	int tolerance;
+	double tolerance;
 	int lValue;
 
 	size_t mx[3];
@@ -122,8 +122,6 @@ public:
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
-
-	virtual void test(void);
 
 };
 

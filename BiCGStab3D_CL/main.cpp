@@ -266,13 +266,6 @@ int main(int argc, char** argv) {
 
 	try {
 
-#if TEST_CASE == 1
-		cout << "\t\t<<< TESTING CASE >>>" << endl;
-		cout << endl;
-		solver->test();
-		cout << "\t\t<<< END: TESTING CASE >>>" << endl;
-#endif
-
 
 		if(testSwitch == TEST_ONE) {
 			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
