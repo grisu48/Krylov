@@ -25,7 +25,7 @@ using namespace flexCL;
 
 // Verbose output
 #ifndef VERBOSE
-#define VERBOSE 1
+#define VERBOSE 0
 #endif
 // Profiling mode on or off
 #ifndef PROFILING
@@ -33,7 +33,7 @@ using namespace flexCL;
 #endif
 
 #ifndef TESTING
-#define TESTING 1
+#define TESTING 0
 #endif
 
 
@@ -1027,7 +1027,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			norm = _matrix_residuals[0]->l2Norm();
 
 			cout << "Iteration " << iterations << ": NORM = " << norm;
-#if VERBOSE == 1
+#if TESTING == 1
 			const double phi_hash = hash_cl(cl_phi);
 			cout << " hash(PHI) = " << phi_hash;
 			const double residual_hash = hash_cl(_matrix_residuals[0]);
