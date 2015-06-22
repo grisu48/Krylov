@@ -6,6 +6,7 @@
 #include "mpi_manager.H"
 #include "LinSolver3D.hpp"
 #include "solveLin_BICGStab.H"
+#include "time_ms.h"
 // #include "SteadyStateMultigrid3DDiff.H"
 
 using namespace std;
@@ -381,6 +382,7 @@ int main(int argc, char *argv[]) {
 
 	cout << " lösen " << endl;
 
+	long long runtime = -time_ms();
 	if(switch_test==1) {
 		lin_solver->solve(MyBounds, phi, rhs, lambda,
 		                  Diff[0], Diff[1], Diff[2],8);
@@ -391,6 +393,8 @@ int main(int argc, char *argv[]) {
 		lin_solver->solve(MyBounds, phi, rhs, lambda,
 		                  DiffTens[0], DiffTens[1], DiffTens[2], DiffTens[3],8,true);
 	}
+	runtime += time_ms();
+	cout << "Solver fertig in " << runtime << " ms";
 
 	NumMatrix<double,3> & Dxx = DiffTens[0];
 	NumMatrix<double,3> & Dyy = DiffTens[1];
@@ -467,6 +471,7 @@ int main(int argc, char *argv[]) {
 	if(MyMPI.get_rank()==0)
 #endif
 	std::cout << " l2 error for " << mx[0] << " is " << l2err << std::endl;
+	cout << "Runtime (solver) : " << runtime << " ms";
 
 	delete lin_solver;
 
