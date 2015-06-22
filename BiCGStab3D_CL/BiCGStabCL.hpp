@@ -60,6 +60,8 @@ protected:
 	double tolerance;
 	int lValue;
 
+	bool verbose;
+
 	size_t mx[3];
 	double deltaX[3];
 
@@ -109,6 +111,7 @@ public:
 	/** Checks if the context is initialized */
 	bool isInitialized(void);
 
+	void setVerbose(bool);
 
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,

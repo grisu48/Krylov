@@ -398,7 +398,7 @@ int main(int argc, char *argv[]) {
 		                  DiffTens[0], DiffTens[1], DiffTens[2], DiffTens[3],8,true);
 	}
 	runtime += time_ms();
-	cout << "Solver fertig in " << runtime << " ms";
+	cout << "Solver fertig in " << runtime << " ms" << endl;
 
 	NumMatrix<double,3> & Dxx = DiffTens[0];
 	NumMatrix<double,3> & Dyy = DiffTens[1];
@@ -410,7 +410,7 @@ int main(int argc, char *argv[]) {
 	coeff[1] = 1./sqr(dy);
 	coeff[2] = 1./sqr(dz);
 
-	double coeff_xy = 1./(2.*dx*dy);
+	const double coeff_xy = 1./(2.*dx*dy);
 
 
 	// Now let's have a look:
@@ -422,10 +422,13 @@ int main(int argc, char *argv[]) {
 				num += 1.;
 				// if(iy==mx[1]/2 && iz==mx[2]/2) {
 				if(ix==mx[0]/2 && iz==mx[2]/2) {
-					std::cout << iy << " " << phi_ana(ix,iy,iz) << " ";
-					std::cout << phi(ix,iy,iz) << " ";
-					std::cout << phi_ana(ix,iy,iz)-phi(ix,iy,iz) << " ";
-					std::cout << std::endl;
+
+					if(rank == 0) {
+						std::cout << iy << " " << phi_ana(ix,iy,iz) << " ";
+						std::cout << phi(ix,iy,iz) << " ";
+						std::cout << phi_ana(ix,iy,iz)-phi(ix,iy,iz) << " ";
+						std::cout << std::endl;
+					}
 
 					// double disc =
 					// 	(coeff[0]*Dxx(ix,iy,iz)*(phi(ix+1,iy,iz) +

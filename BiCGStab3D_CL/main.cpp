@@ -244,6 +244,7 @@ int main(int argc, char** argv) {
 	VERBOSE("  Setting up solver ... ");
 	try {
 		BiCGStabSolver *bicgsolver = new BiCGStabSolver(grid, tolerance, 2, oclContext);
+		bicgsolver->setVerbose(verbose);
 		bicgsolver->setupContext();
 		solver = bicgsolver;
 	} catch (CompileException &e) {
@@ -292,6 +293,39 @@ int main(int argc, char** argv) {
 		}
 		double l2err = sqrt(error/num);
 		cout << " l2 error: " << l2err << "  (" << error << "/" << num << ")" << endl;
+
+		// Detailed look at solution
+		// Now let's have a look:
+		if(verbose) {
+			cout << "Detailed look at solution: " << endl;
+			for(size_t iz = 0; iz <= mx[2]; ++iz) {
+				for(size_t iy = 0; iy <= mx[1]; ++iy) {
+					for(size_t ix = 0; ix <= mx[0]; ++ix) {
+						// Just print data in center
+						if(ix==mx[0]/2 && iz==mx[2]/2) {
+							cout << "\t at y = " << iy << ": (" << phi_exact(ix,iy,iz) << " - " << phi(ix,iy,iz) << ") = ";
+							cout << phi_exact(ix,iy,iz)-phi(ix,iy,iz) << endl;
+						}
+					}
+				}
+			}
+		}
+
+		// Search for maximum error
+		double max_error = -1.0;
+
+		for(size_t iz = 0; iz <= mx[2]; ++iz) {
+			for(size_t iy = 0; iy <= mx[1]; ++iy) {
+				for(size_t ix = 0; ix <= mx[0]; ++ix) {
+					const double c_error = fabs(phi_exact(ix,iy,iz)-phi(ix,iy,iz));
+					if(max_error <= 0.0) max_error = c_error;
+					else max_error = fmax(max_error, c_error);
+				}
+			}
+		}
+
+		cout << "Maximum error: " << max_error << endl;
+
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
 		DELETE(solver);

@@ -354,6 +354,8 @@ BiCGStabSolver::~BiCGStabSolver() {
 }
 bool BiCGStabSolver::isInitialized(void) { return this->status == _STATUS_READY; }
 
+void BiCGStabSolver::setVerbose(bool verbose) { this->verbose = verbose; }
+
 void BiCGStabSolver::setupContext(void) {
 	//cleanupContext();
 #if VERBOSE == 1
@@ -864,25 +866,21 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		//printFull(_matrix_residuals[0], "CL_PRIM_RESIDUAL");
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
-
-		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
-		// NOTE: Until here it works now :-)
-		// Note: Residuals are the same
+		//cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 
 		long runtime = -time_ms();
 		do {
 			iterations++;
-#if VERBOSE || TESTING == 1 == 1
-			if(iterations > 1) {
-				runtime += time_ms();
-				cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
-			} else
-				cout << "Starting iteration " << iterations << " ... " << endl;
-#endif
+			if(this->verbose) {
+				if(iterations > 1) {
+					runtime += time_ms();
+					cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
+				} else
+					cout << "Starting iteration " << iterations << " ... " << endl;
+			}
 #if TESTING == 1
 			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
 #endif
-
 			runtime = -time_ms();
 			//cout << "omega = " << omega << endl;
 
@@ -1041,21 +1039,20 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 			norm = _matrix_residuals[0]->l2Norm();
 
-#if VERBOSE == 1 || TESTING == 1
-			cout << "Iteration " << iterations << ": NORM = " << norm;
-#endif
-#if TESTING == 1
-			const double phi_hash = hash_cl(cl_phi);
-			cout << " hash(PHI) = " << phi_hash;
-			const double residual_hash = hash_cl(_matrix_residuals[0]);
-			cout << ",  hash(RESIDUAL) = " << residual_hash;
+			if(this->verbose) {
+				cout << "Iteration " << iterations << ": NORM = " << norm;
 
-			printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
-			printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
+#if TESTING == 1
+				const double phi_hash = hash_cl(cl_phi);
+				cout << " hash(PHI) = " << phi_hash;
+				const double residual_hash = hash_cl(_matrix_residuals[0]);
+				cout << ",  hash(RESIDUAL) = " << residual_hash;
+
+				printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
+				printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
 #endif
-#if VERBOSE == 1 || TESTING == 1
-			cout << endl;
-#endif
+				cout << endl;
+			}
 
 			if(iterations > 1000) {
 				cout << "EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
