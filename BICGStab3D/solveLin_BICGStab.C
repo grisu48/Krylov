@@ -76,10 +76,13 @@ inline std::string f_filename(const char* filename) {
 	return result;
 }
 
-void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
+void printFull(NumMatrix<double, 3> &matrix, const char* filename, bool relativePath = true) {
 	ofstream out;
-	string fname = f_filename(filename);
-	out.open(fname.c_str());;
+	if(relativePath) {
+		string fname = f_filename(filename);
+		out.open(fname.c_str());
+	} else
+		out.open(filename);
 	printFull(matrix, out);
 	out.close();
 }
@@ -903,6 +906,8 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	norm = get_l2Norm(residuals[0]);
 	cout << " Other? norm " << norm << endl;
 	cout << residuals[0](3,11,8) << endl;
+
+	printFull(phi, "Result_Phi", false);
 
 	// Solution is returned as stored in phi
 }

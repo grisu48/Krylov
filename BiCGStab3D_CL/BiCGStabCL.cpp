@@ -214,18 +214,25 @@ inline std::string f_filename(const char* filename) {
 	return result;
 }
 
-void printFull(NumMatrix<double, 3> &matrix, const char* filename) {
+void printFull(NumMatrix<double, 3> &matrix, const char* filename, bool relativePath = true) {
 	ofstream out;
-	std::string fname = f_filename(filename);
-	out.open(fname.c_str());
+	std::string fname;
+	if(relativePath) {
+		fname = f_filename(filename);
+		out.open(fname.c_str());
+	} else
+		out.open(filename);
 	printFull(matrix, out);
 	out.close();
 }
 
-void printFull(flexCL::CLMatrix3d *matrix, const char* filename) {
+void printFull(flexCL::CLMatrix3d *matrix, const char* filename, bool relativePath = true) {
 	ofstream out;
-	std::string fname = f_filename(filename);
-	out.open(fname.c_str());
+	if (relativePath) {
+		std::string fname = f_filename(filename);
+		out.open(fname.c_str());
+	} else
+		out.open(filename);
 	printFull(matrix, out);
 	out.close();
 }
@@ -1049,6 +1056,10 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 		// Transfer results
 		transferMatrix(cl_phi, phi);
+
+
+		// Write result to file
+		printFull(phi, "Result_Phi_CL", false);
 
 	} catch (...) {
 		// Emergency cleanup
