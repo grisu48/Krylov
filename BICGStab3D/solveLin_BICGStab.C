@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "solveLin_BICGStab.H"
+#include "time_ms.h"
 
 using namespace std;
 
@@ -729,11 +730,18 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	double sigma[LValue+1], gammap[LValue+1], gammapp[LValue+1];
 	double gamma[LValue+1];
 
+	long long iteration_runtime = -time_ms();
 	do {
 		iter_steps++;
 		//		if(iter_steps==15) exit(3);
 		if(rank==0 && debug>2) {
-			cout << " Iteration: " << iter_steps << endl;
+			cout << " Iteration: " << iter_steps;
+			if(iter_steps > 1) {
+				iteration_runtime += time_ms();
+				cout << " (" << iteration_runtime << " ms)";
+			}
+			cout << endl;
+			iteration_runtime = -time_ms();
 			//cout << "    hash(phi) = " << hash(phi) << endl;
 		}
 

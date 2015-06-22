@@ -50,6 +50,10 @@ int main(int argc, char *argv[]) {
 	int ntasks;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#else
+	int rank = 0;
 #endif
 
 	NumArray<int> mx_global(3);
@@ -471,7 +475,12 @@ int main(int argc, char *argv[]) {
 	if(MyMPI.get_rank()==0)
 #endif
 	std::cout << " l2 error for " << mx[0] << " is " << l2err << std::endl;
-	cout << "Runtime (solver) : " << runtime << " ms";
+
+#ifdef parallel
+	cout << "Runtime (solver) : " << runtime << " ms for rank " << rank << endl;
+#else
+	cout << "Runtime (solver) : " << runtime << " ms" << endl;
+#endif
 
 	delete lin_solver;
 

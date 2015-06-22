@@ -19,7 +19,7 @@
 
 // Perform additional checks to verify the stability of the code
 #ifndef _FLEXCL_ADDITIONAL_CHECKS
-#define _FLEXCL_ADDITIONAL_CHECKS 1
+#define _FLEXCL_ADDITIONAL_CHECKS 0
 #endif
 // Assumed local size, if the device query fails
 #ifndef _FLEXCL_ASSUMED_LOCALMEM_

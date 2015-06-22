@@ -869,16 +869,16 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		// NOTE: Until here it works now :-)
 		// Note: Residuals are the same
 
-
 		long runtime = -time_ms();
 		do {
 			iterations++;
+#if VERBOSE || TESTING == 1 == 1
 			if(iterations > 1) {
 				runtime += time_ms();
 				cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
 			} else
 				cout << "Starting iteration " << iterations << " ... " << endl;
-
+#endif
 #if TESTING == 1
 			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
 #endif
@@ -1041,7 +1041,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 			norm = _matrix_residuals[0]->l2Norm();
 
+#if VERBOSE == 1 || TESTING == 1
 			cout << "Iteration " << iterations << ": NORM = " << norm;
+#endif
 #if TESTING == 1
 			const double phi_hash = hash_cl(cl_phi);
 			cout << " hash(PHI) = " << phi_hash;
@@ -1051,7 +1053,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
 			printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
 #endif
+#if VERBOSE == 1 || TESTING == 1
 			cout << endl;
+#endif
 
 			if(iterations > 1000) {
 				cout << "EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
