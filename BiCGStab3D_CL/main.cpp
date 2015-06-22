@@ -71,7 +71,7 @@ static int opencl_context = OCL_CONTEXT_DEFAULT;
 
 static int testSwitch = TEST_ONE;
 /* Tolerance for the computation */
-static double tolerance = 1e-9;
+static double tolerance = 1e-6;
 
 /* ==== Function prototypes ================================================ */
 

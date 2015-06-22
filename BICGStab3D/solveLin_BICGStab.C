@@ -696,6 +696,12 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	double normRHS = get_l2Norm(rhs);
 	if(normRHS == 0.) normRHS = 1.;
 
+	cout << "Input variables:" << endl;
+	cout << "\thash(phi)     = " << hash(phi) << endl;
+	cout << "\thash(rhs)     = " << hash(rhs) << endl;
+	cout << "\thash(lambda)  = " << hash(lambda) << endl;
+
+
 	cout << "  normRHS = " << normRHS << endl;
 
 	int iter_steps=0;
@@ -725,6 +731,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		//		if(iter_steps==15) exit(3);
 		if(rank==0 && debug>2) {
 			cout << " Iteration: " << iter_steps << endl;
+			cout << "    hash(phi) = " << hash(phi) << endl;
 		}
 
 		//cout << "omega = " << omega << endl;
@@ -851,8 +858,29 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		norm = get_l2Norm(residuals[0]);
 		if(rank==0 && debug>2) {
 			std::cout << " My error norm: " << norm << " ";
-			std::cout << sqrt(norm) << " " << eps*normRHS << std::endl;
+			std::cout << sqrt(norm) << " " << eps*normRHS;
+
+			const double hash_phi = hash(phi);
+			const double hash_residual = hash(residuals[0]);
+			std::cout << " hash(phi) = " << hash_phi;
+			std::cout << ", hash(residual) " << hash_residual;
+
+			std::cout << std::endl;
+
+
+			stringstream ss;
+			ss << "Phi" << iter_steps;
+			string phi_filename = ss.str();
+			ss.str("");
+			ss << "Residual" << iter_steps;
+			string res_filename = ss.str();
+			printFull(phi, phi_filename.c_str());
+			printFull(residuals[0], res_filename.c_str());
 		}
+
+
+
+
 
 
 	} while (norm > eps*normRHS);

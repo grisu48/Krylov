@@ -11,6 +11,9 @@
 using namespace std;
 
 
+const double tolerance = 1e-6;
+
+
 
 static void printMatXY(NumMatrix<double, 3> &mat, int z, ostream &out = cout) {
 	ssize_t low[3];
@@ -368,9 +371,9 @@ int main(int argc, char *argv[]) {
 	Linsolver3D *lin_solver = NULL;
 
 #ifdef parallel
-	lin_solver = new BICGStab(LocalGrid, 1.e-6, 2, MyMPI);
+	lin_solver = new BICGStab(LocalGrid, tolerance, 2, MyMPI);
 #else
-	lin_solver = new BICGStab(MyGrid, 1.e-9, 2);
+	lin_solver = new BICGStab(MyGrid, tolerance, 2);
 #endif
 
 	// SteadyDiffSolver.solve(MyBounds, phi, rhs, lambda,

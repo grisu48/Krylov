@@ -12,7 +12,6 @@
 #include "time_ms.h"
 
 
-
 using namespace std;
 using namespace flexCL;
 
@@ -26,7 +25,7 @@ using namespace flexCL;
 
 // Verbose output
 #ifndef VERBOSE
-#define VERBOSE 0
+#define VERBOSE 1
 #endif
 // Profiling mode on or off
 #ifndef PROFILING
@@ -34,7 +33,7 @@ using namespace flexCL;
 #endif
 
 #ifndef TESTING
-#define TESTING 0
+#define TESTING 1
 #endif
 
 
@@ -52,10 +51,8 @@ using namespace std;
 using namespace flexCL;
 
 
-/** ==== DEBUGGIGN METHODS ===================================================================== */
 
-
-//#if TESTING == 1
+/* ==== DEBUGGING ACTIONS ====================================================================== */
 
 // Some random hash function for the matrix
 double hash(NumMatrix<double, 3> &matrix) {
@@ -232,6 +229,9 @@ void printFull(flexCL::CLMatrix3d *matrix, const char* filename) {
 	printFull(matrix, out);
 	out.close();
 }
+void printFull(flexCL::CLMatrix3d *matrix, string filename) {
+	printFull(matrix, filename.c_str());
+}
 
 void printFull(flexCL::Matrix3d *matrix, const char* filename) {
 	ofstream out;
@@ -298,15 +298,6 @@ size_t compareMatrices(NumMatrix<double,3> mat1, CLMatrix3d* mat2, ostream &out 
 
 
 }
-
-
-//#endif
-
-
-
-
-
-
 
 
 
@@ -524,6 +515,44 @@ static CLMatrix3d* transferMatrix(Context *context, NumMatrix<double,3> &matrix,
 	return result;
 }
 
+/**
+ * Transfer destination matrix to NumMatrix instance
+ */
+static void transferMatrix(flexCL::CLMatrix3d *matrix, NumMatrix<double, 3> &dst) {
+	Matrix3d *temp = matrix->transferToHost();
+
+	const ssize_t rim = RIM;		// Number of ghost cells
+	ssize_t _size[3];
+	ssize_t _low[3];
+	ssize_t _high[3];
+
+	for(int i=0;i<3;i++) {
+		_low[i] = dst.getLow(i);
+		_high[i] = dst.getHigh(i);
+		_size[i] = _high[i] - _low[i]-2*rim;
+
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+		if( -_low[i] != rim) throw OpenCLException("transferMatrix - NumMatrix RIM field mismatch");
+#endif
+	}
+
+	// Copy the whole matrix
+	for(ssize_t ix=_low[0]; ix<_high[0]; ix++) {
+		for(ssize_t iy=_low[1]; iy<_high[1]; iy++) {
+			for(ssize_t iz=_low[2]; iz<_high[2]; iz++) {
+				const double value = temp->get(ix,iy,iz);
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+				if(::isnan(value) || ::isinf(value))
+					cerr << "transferMatrix - NAN or INF value at " << ix << "," << iy << "," << iz << endl;
+#endif
+				dst(ix,iy,iz) =  value;
+			}
+		}
+	}
+
+	delete temp;
+}
+
 void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
 	//matrix->clearRim();
 	//return;
@@ -640,12 +669,13 @@ bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d *matrix) {
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
 	this->generateAx(phi, residual, lambda, Dxx, Dyy, Dzz, Dxy);
 	residual->add(rhs);
-	applyBoundary(residual);
 
 #if PROFILING == 1
 	this->_context->join();
 	cerr << "PROFILING: calculated Residual" << endl;
 #endif
+
+	applyBoundary(residual);
 }
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda) {
@@ -656,6 +686,7 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 	// Use residual as intermediate buffer
 	this->generateAx(phi, residual, lambda);
 #if PROFILING == 1
+	this->_context->join();
 	runtime += _clKernelGenerateAx_NoSpatial->runtime();
 #endif
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -663,7 +694,6 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 	if(!checkMatrix(residual))  throw "generateAx(generateAx) - checkMatrix(residual) failed";
 	if(!checkMatrix(lambda))    throw "generateAx(generateAx) - checkMatrix(lambda) failed";
 #endif
-
 	residual->add(rhs);
 #if PROFILING == 1
 	runtime += residual->lastKernelRuntime();
@@ -672,11 +702,10 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 	if(!checkMatrix(residual))  throw "generateAx(residual->add) - checkMatrix(residual) failed";
 #endif
 #if PROFILING == 1
+	this->_context->join();
 	runtime += this->_clKernelBoundary->runtime();
 #endif
-#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
-	if(!checkMatrix(residual))  throw "generateAx(applyBoundary) - checkMatrix(residual) failed";
-#endif
+
 
 #if PROFILING == 1
 	this->_context->join();
@@ -684,6 +713,9 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #endif
 
 	applyBoundary(residual);
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	if(!checkMatrix(residual))  throw "generateAx(applyBoundary) - checkMatrix(residual) failed";
+#endif
 }
 
 void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
@@ -781,6 +813,13 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	}
 #endif
 
+
+
+	cout << "Input variables:" << endl;
+	cout << "\thash(phi)     = " << hash_cl(cl_phi) << endl;
+	cout << "\thash(rhs)     = " << hash_cl(cl_rhs) << endl;
+	cout << "\thash(lambda)  = " << hash_cl(cl_lambda) << endl;
+
 	try {
 		unsigned long iterations = 0;
 		double normRhs = cl_rhs->l2Norm();
@@ -826,6 +865,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
 			} else
 				cout << "Starting iteration " << iterations << " ... " << endl;
+
+			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
+
 			runtime = -time_ms();
 			//cout << "omega = " << omega << endl;
 
@@ -984,7 +1026,17 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 			norm = _matrix_residuals[0]->l2Norm();
 
-			cout << "Iteration " << iterations << ": NORM = " << norm << endl;
+			cout << "Iteration " << iterations << ": NORM = " << norm;
+#if VERBOSE == 1
+			const double phi_hash = hash_cl(cl_phi);
+			cout << " hash(PHI) = " << phi_hash;
+			const double residual_hash = hash_cl(_matrix_residuals[0]);
+			cout << ",  hash(RESIDUAL) = " << residual_hash;
+
+			printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
+			printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
+#endif
+			cout << endl;
 
 			if(iterations > 1000) {
 				cout << "EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
@@ -994,6 +1046,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 		cout << "Completed after " << iterations << " iterations" << endl;
 
+
+		// Transfer results
+		transferMatrix(cl_phi, phi);
 
 	} catch (...) {
 		// Emergency cleanup
