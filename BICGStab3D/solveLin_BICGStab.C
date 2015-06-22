@@ -734,7 +734,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		//		if(iter_steps==15) exit(3);
 		if(rank==0 && debug>2) {
 			cout << " Iteration: " << iter_steps << endl;
-			cout << "    hash(phi) = " << hash(phi) << endl;
+			//cout << "    hash(phi) = " << hash(phi) << endl;
 		}
 
 		//cout << "omega = " << omega << endl;
@@ -863,13 +863,12 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			std::cout << " My error norm: " << norm << " ";
 			std::cout << sqrt(norm) << " " << eps*normRHS;
 
+#if 0
 			const double hash_phi = hash(phi);
 			const double hash_residual = hash(residuals[0]);
 			std::cout << " hash(phi) = " << hash_phi;
 			std::cout << ", hash(residual) " << hash_residual;
-
 			std::cout << std::endl;
-
 
 			stringstream ss;
 			ss << "Phi" << iter_steps;
@@ -879,6 +878,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			string res_filename = ss.str();
 			printFull(phi, phi_filename.c_str());
 			printFull(residuals[0], res_filename.c_str());
+#endif
 		}
 
 

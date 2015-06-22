@@ -55,6 +55,7 @@ using namespace flexCL;
 /* ==== DEBUGGING ACTIONS ====================================================================== */
 
 // Some random hash function for the matrix
+#if VERBOSE == 1 || TESTING == 1
 double hash(NumMatrix<double, 3> &matrix) {
 	//const long brick = 107534845447;		// Random prime number (HUGE)
 
@@ -132,6 +133,8 @@ double get_l2Norm(NumMatrix<double,3> &vec) {
 	const double dotProd = dot_product(vec);
 	return sqrt(dotProd);
 }
+
+#endif
 
 void print(NumMatrix<double, 3> &matrix) {
 	// Print now output matrix at middle position
@@ -821,11 +824,12 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 
-
+#if VERBOSE == 1 || TESTING == 1
 	cout << "Input variables:" << endl;
 	cout << "\thash(phi)     = " << hash_cl(cl_phi) << endl;
 	cout << "\thash(rhs)     = " << hash_cl(cl_rhs) << endl;
 	cout << "\thash(lambda)  = " << hash_cl(cl_lambda) << endl;
+#endif
 
 	try {
 		unsigned long iterations = 0;
@@ -833,7 +837,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		if(normRhs < 1e-9) normRhs = 1.0;
 
 		cout << "  normRHS  = " << normRhs << endl;
+#if VERBOSE == 1
 		cout << "  Expected = " << get_l2Norm(rhs) << endl;
+#endif
 
 		// Mathematical variables
 		double rho0 = 1.0;
@@ -873,7 +879,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			} else
 				cout << "Starting iteration " << iterations << " ... " << endl;
 
+#if TESTING == 1
 			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
+#endif
 
 			runtime = -time_ms();
 			//cout << "omega = " << omega << endl;
