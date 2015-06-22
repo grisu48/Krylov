@@ -164,7 +164,7 @@ int main(int argc, char *argv[]) {
 	DiffTens[3].clear();
 
 	// choice of test to be run
-	int switch_test(1);
+	int switch_test(2);
 
 	double DPar = 1.;
 	double DPerp = 0.1;

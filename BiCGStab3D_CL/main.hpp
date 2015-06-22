@@ -13,6 +13,10 @@
 
 
 /* Test cases */
-#define TEST_ONE 0
+#define TEST_ONE 1
+#define TEST_TWO 2
+#define TEST_THREE 3
+#define TEST_FOUR 4
+
 
 #endif /* MAIN_HPP_ */

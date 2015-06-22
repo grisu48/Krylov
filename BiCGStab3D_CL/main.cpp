@@ -109,10 +109,14 @@ int main(int argc, char** argv) {
 				opencl_context = OCL_CONTEXT_GPU;
 			else if(arg == "--cpu")
 				opencl_context = OCL_CONTEXT_CPU;
-			else if(arg == "-n") {
+			else if(arg == "-n" || arg == "--np") {
 				if(isLast) throw "Missing argument: Problem size";
 				size = atoi(argv[++i]);
-			}
+			} else if(arg == "-t" || arg == "--test") {
+				if(isLast) throw "Missing argument: Test case";
+				testSwitch = atoi(argv[++i]);
+			} else
+				throw "Illegal argument";
 		} catch(const char* msg) {
 			cerr << msg << endl;
 			return EXIT_FAILURE;
@@ -151,7 +155,7 @@ int main(int argc, char** argv) {
 	static size_t Nx_global[3] { size+1, size+1, size+1 };
 
 
-    VERBOSE("  Problem initialization ... (" << mx[0] << "x" << mx[1] << "x" << mx[2] << ")");
+    VERBOSE("  Problem initialization (" << mx[0] << "x" << mx[1] << "x" << mx[2] << ") - Test switch " << testSwitch << " ... ");
 	grid_manager grid(0., 0., 0., 1., 1., 1., Nx_global[0], Nx_global[1], Nx_global[2], 1);
 	BoundaryHandler3D boundaries;
 	// Set all boundary conditions to Dirichlet condition
@@ -175,6 +179,10 @@ int main(int argc, char** argv) {
 	diffTens[3].resize(Index::set(-1,-1,-1), Index::set(mx[0]+1, mx[1]+1, mx[2]+1));
 
 
+
+	const double dPar = 1.0;
+	const double dPerp = 0.1;
+
 	// Setting grid values
 	try {
 		diffTens[0].set_constVal(1.0);
@@ -190,6 +198,7 @@ int main(int argc, char** argv) {
 		phi.clear();
 		rhs.clear();
 
+		const double pi = M_PI;
 		for(size_t iz = 0; iz <= mx[2]; ++iz) {
 			const double zVal = grid.get_Pos(2,iz);
 			for(size_t iy = 0; iy <= mx[1]; ++iy) {
@@ -208,6 +217,60 @@ int main(int argc, char** argv) {
 					case TEST_ONE:
 						rhs(ix,iy,iz) = -(sqr(M_PI)*(diff(0) + diff(1) + diff(2)) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
 						break;
+					case TEST_TWO:		// Test 2 (räumliche Diffusion)
+					{
+						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
+
+						diffTens[0](ix,iy,iz) = yVal;
+						diffTens[1](ix,iy,iz) = xVal;
+						diffTens[2](ix,iy,iz) = zVal;
+						rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) + pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal);
+					}
+						break;
+					case TEST_THREE:	// Test 3 (räumliche Diffusion mit D_xy)
+					{
+						double AVal = 0.1;//1.8;
+						diffTens[0](ix,iy,iz) = yVal;
+						diffTens[1](ix,iy,iz) = xVal;
+						diffTens[2](ix,iy,iz) = zVal;
+						// DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
+						diffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
+						const double D_xy = diffTens[3](ix,iy,iz);
+						rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) +
+								pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal) +
+								2.*D_xy*sqr(pi)*cos(pi*xVal)*cos(pi*yVal)*sin(pi*zVal)+
+								2.*AVal*xVal*yVal*zVal*pi*sin(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) +
+								AVal*sqr(xVal)*zVal*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
+					}
+						break;
+					case TEST_FOUR:
+					{
+						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
+						const double angle = atan2(yVal, xVal);
+						diffTens[0](ix,iy,iz) = (dPar*sqr(sin(angle)) + dPerp*sqr(cos(angle)));
+						diffTens[1](ix,iy,iz) = (dPar*sqr(cos(angle)) + dPerp*sqr(sin(angle)));
+						diffTens[2](ix,iy,iz) = dPerp;
+						diffTens[3](ix,iy,iz) = (dPerp - dPar)*sin(angle)*cos(angle);
+
+						const double Dxx = diffTens[0](ix,iy,iz);
+						const double Dyy = diffTens[1](ix,iy,iz);
+						const double Dzz = diffTens[2](ix,iy,iz);
+						const double Dxy = diffTens[3](ix,iy,iz);
+						const double sqrRad = sqr(xVal) + sqr(yVal);
+						const double dphidx = -yVal/sqrRad;
+						const double dphidy = xVal/sqrRad;
+						const double dDxxDx = 2.*(dPar - dPerp)*sin(angle)*cos(angle)*dphidx;
+						const double dDyyDy = 2.*(dPerp - dPar)*sin(angle)*cos(angle)*dphidy;
+						const double dDxyDx = (dPerp - dPar)*(sqr(cos(angle)) - sqr(sin(angle)))*dphidx;
+						const double dDxyDy = (dPerp - dPar)*(sqr(cos(angle)) - sqr(sin(angle)))*dphidy;
+
+						rhs(ix,iy,iz) =
+								(dDyyDy + dDxyDx)*pi*sin(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) +
+								(dDxxDx + dDxyDy)*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal) +
+								2.0*Dxy*sqr(pi)*cos(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) -
+								((Dxx + Dyy + Dzz)*sqr(pi) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
+					}
+					break;
 
 					default:
 						throw "Illegal test case";
@@ -268,9 +331,12 @@ int main(int argc, char** argv) {
 
 	try {
 
-
 		if(testSwitch == TEST_ONE) {
 			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
+		} else if (testSwitch == TEST_TWO) {
+			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8);
+		} else if(testSwitch == TEST_THREE || testSwitch == TEST_FOUR) {
+			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8, true);
 		} else {
 			cerr << "UNKNOWN TEST SWITCH: " << testSwitch << endl;
 			return EXIT_FAILURE;
@@ -377,9 +443,10 @@ static void printHelp(string programName) {
     cout << "  OPTIONS" << endl;
     cout << "    -h   --help                   Show program help" << endl;
     cout << "    -v   --verbose                Verbose mode" << endl;
-    cout << "    -n N                          Set problem size to N" << endl;
+    cout << "    -n N --np N                   Set problem size to N" << endl;
     cout << "         --cpu                    Use CPU context (OpenCL)" << endl;
     cout << "         --gpu                    Use GPU context (OpenCL)" << endl;
+    cout << "    -t --test TEST                Set test case to TEST" << endl;
 }
 
 

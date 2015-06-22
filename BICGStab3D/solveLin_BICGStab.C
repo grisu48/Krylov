@@ -589,6 +589,10 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 		bounds.do_BCs(vecOut, 1);
 	}
 
+	printFull(psi, "multiplyWithMat_psi");
+	cout << "Written." << endl;
+	exit(8);
+
 }
 
 
@@ -745,25 +749,24 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			//cout << "    hash(phi) = " << hash(phi) << endl;
 		}
 
-		//cout << "omega = " << omega << endl;
+		cout << "omega = " << omega << endl;
 		rho0 *= -omega;
-		//cout << "rho0 = " << rho0 << endl;
+		cout << "rho0 = " << rho0 << endl;
 
 
 
 
 		// BI-CG part:
 		for(int jj=0; jj<LValue; ++jj) {
-			//cout << "jj iteration " << jj << endl;
+			cout << "jj iteration " << jj << endl;
 
-			//cout << "<res[" << jj << "],res[" << jj << "]> = " << dot_product(residuals[jj], residuals[jj]) << endl;
-			//cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
+			cout << "residual[" << jj << "]) = " << hash(residuals[jj]) << endl;
 
 			rho1 = dot_product(residuals[jj], resTilde);
-			//cout << "rho1 = " << rho1 << endl;
+			cout << "rho1 = " << rho1 << endl;
 
 			double beta = alpha*rho1/rho0;
-			//cout << "beta = " << beta << endl;
+			cout << "beta = " << beta << endl;
 			//			cout << " Anf: " << beta << " " << rho0 << " " << rho1 << " " << alpha << endl;
 			//			cout << " Some vals " << residuals[jj](3,5,9) << " " << resTilde(3,5,9) << endl;
 			rho0 = rho1;
@@ -785,14 +788,15 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			}
 
 
-			//cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
-			//cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
+			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
+			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
+			exit(8);
 			//cout << "hash(lambda) = " << hash(lambda) << endl;
 
 			//cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
 
 			alpha = rho0/dot_product(uMat[jj+1], resTilde);
-			//cout << "alpha = " << alpha << endl;
+			cout << "alpha = " << alpha << endl;
 			// cout << " rho " << alpha << " " << rho0 << " " << dot_product(uMat[jj+1], resTilde) << endl;
 			// cout << " Beta " << beta << " " << rho1 << endl;
 

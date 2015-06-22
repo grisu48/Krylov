@@ -8,13 +8,6 @@
 #ifndef BICGSTAB_SOLVER_OPENCL_HPP_
 #define BICGSTAB_SOLVER_OPENCL_HPP_
 
-#define COMPARE_SOLVER 0
-
-// Additional checks in the BiCGStab solver used for debugging
-#ifndef BICGSTAB_SOLVER_ADDITIONAL_CHECKS
-#define BICGSTAB_SOLVER_ADDITIONAL_CHECKS 0
-#endif
-
 
 #include "LinSolver3D.hpp"
 #include "grid_manager.H"

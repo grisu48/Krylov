@@ -23,9 +23,18 @@ using namespace flexCL;
 /* Kernel filename */
 #define KERNEL_FILENAME "bicgstab_kernel.cl"
 
+
+
+/* ==== Switches =============================================================================== */
+
+// Additional checks in the BiCGStab solver used for debugging
+#ifndef BICGSTAB_SOLVER_ADDITIONAL_CHECKS
+#define BICGSTAB_SOLVER_ADDITIONAL_CHECKS 0
+#endif
+
 // Verbose output
 #ifndef VERBOSE
-#define VERBOSE 0
+#define VERBOSE 1
 #endif
 // Profiling mode on or off
 #ifndef PROFILING
@@ -33,16 +42,11 @@ using namespace flexCL;
 #endif
 
 #ifndef TESTING
-#define TESTING 0
+#define TESTING 1
 #endif
 
-
-// Delete routine including a NULL check and assignment
-#define DELETE(x) { if(x!=NULL) delete x; x = NULL; }
 // Tolerance for numerical operations
 #define epsilon 1e-3
-// Equal comparison for two floating point values
-#define REAL_EQUAL(x,y) { fabs(x-y)<epsilon*(y/x) }
 // Number of ghost cells
 #define RIM 1
 
@@ -50,7 +54,13 @@ using namespace flexCL;
 using namespace std;
 using namespace flexCL;
 
+// Maximum number of iterations before the solver quits or negative number, if this check should be disabled
+#define MAX_ITERATIONS 10000L
 
+// Equal comparison for two floating point values
+#define REAL_EQUAL(x,y) { fabs(x-y)<epsilon*(y/x) }
+// Delete routine including a NULL check and assignment
+#define DELETE(x) { if(x!=NULL) delete x; x = NULL; }
 
 /* ==== DEBUGGING ACTIONS ====================================================================== */
 
@@ -339,18 +349,10 @@ BiCGStabSolver::BiCGStabSolver(grid_manager &grid, double tolerance, int lValue,
 	this->_clKernelGenerateAx_NoSpatial = NULL;
 	this->_clKernelBoundary = NULL;
 
-#if COMPARE_SOLVER == 1
-	this->compare_solver = new BICGStab(grid, tolerance, lValue);
-#endif
-
 }
 
 BiCGStabSolver::~BiCGStabSolver() {
 	this->cleanupContext();
-
-#if COMPARE_SOLVER == 1
-	DELETE(this->compare_solver);
-#endif
 }
 bool BiCGStabSolver::isInitialized(void) { return this->status == _STATUS_READY; }
 
@@ -598,6 +600,15 @@ void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
 	applyBoundary(phi);
 
+#if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
+	if(!this->checkMatrix(phi)) throw "generateAx_Full Preliminary check failed for phi";
+	if(!this->checkMatrix(lambda)) throw "generateAx_Full Preliminary check failed for lambda";
+	if(!this->checkMatrix(Dxx)) throw "generateAx_Full Preliminary check failed for Dxx";
+	if(!this->checkMatrix(Dyy)) throw "generateAx_Full Preliminary check failed for Dyy";
+	if(!this->checkMatrix(Dzz)) throw "generateAx_Full Preliminary check failed for Dzz";
+	if(!this->checkMatrix(Dxy)) throw "generateAx_Full Preliminary check failed for Dxy";
+#endif
+
 	this->_clKernelGenerateAx_Full->setArgument(0, phi->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(1, lambda->clMem());
 	this->_clKernelGenerateAx_Full->setArgument(2, Dxx->clMem());
@@ -613,8 +624,11 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_clKernelGenerateAx_Full->setArgument(11, this->deltaX[0]);
 	this->_clKernelGenerateAx_Full->setArgument(12, this->deltaX[1]);
 	this->_clKernelGenerateAx_Full->setArgument(13, this->deltaX[2]);
+	this->_clKernelGenerateAx_Full->setArgument(14, 1.0); //this->diffDiag[0]);
+	this->_clKernelGenerateAx_Full->setArgument(15, 1.0); //this->diffDiag[1]);
+	this->_clKernelGenerateAx_Full->setArgument(16, 1.0); //this->diffDiag[2]);
 
-	this->_clKernelGenerateAx_NoSpatial->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
+	this->_clKernelGenerateAx_Full->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
 
 #if PROFILING == 1
 	this->_context->join();
@@ -626,6 +640,10 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	if(!this->checkMatrix(dst)) throw "generateAx_Full produces illegal values in dst";
 #endif
 	applyBoundary(dst);
+
+	printFull(dst, "Ax_Cl");
+	cout << "Written." << endl;
+	exit(8);
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda) {
@@ -867,7 +885,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		//printFull(_matrix_residuals[0], "CL_PRIM_RESIDUAL");
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
-		//cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 
 		long runtime = -time_ms();
 		do {
@@ -883,38 +901,37 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
 #endif
 			runtime = -time_ms();
-			//cout << "omega = " << omega << endl;
+			cout << "omega = " << omega << endl;
 
 			rho0 *= -omega;
-			//cout << "rho0 = " << rho0 << endl;
+			cout << "rho0 = " << rho0 << endl;
 
 			// ==== BI-CG PART ============================================= //
-			// cout << "BI-CG part of the solver ... " << endl;
+			 cout << "BI-CG part of the solver ... " << endl;
 
 
 			for(int jj=0; jj<lValue; ++jj) {
-				//cout << "jj iteration " << jj << endl;
+				cout << "jj iteration " << jj << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
 
-				//cout << "\t<res[" << jj << "],res[" << jj << "]> = " << _matrix_residuals[jj]->dotProduct() << endl;
-				//cout << "\t<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+				cout << "hash(residual[" << jj << "]) = " << hash_cl(this->_matrix_residuals[jj]) << endl;
 
 
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
-				//cout << "\trho1 = " << rho1 << endl;
+				cout << "\trho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
-				//cout << "\tbeta = " << beta << endl;
+				cout << "\tbeta = " << beta << endl;
 
 				for(int ii=0; ii<=jj; ++ii) {
-					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->mul(-beta);
-					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->add(_matrix_residuals[ii]);
-					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -926,10 +943,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 				else
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda);
-				// Checked: Input parameters are the same (uMat, lambda)
-				// PROBLEM: generateAx produced a different OUTPUT
-
-				//cout << "\tgenerateAx." << endl;
+				cout << "hash(uMat[" << jj+1 << "]) = " << hash_cl(_uMat[jj+1]) << endl;
 				//printFull(_uMat[jj], "CL_uMat");
 				//printFull(cl_lambda, "CL_Lambda");
 				//printFull(_uMat[jj+1], "CL_Ax");
@@ -950,7 +964,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
-				//cout << "\talpha = " << alpha << endl;
+				cout << "\talpha = " << alpha << endl;
 
 				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
@@ -965,6 +979,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				} else {
 					generateAx(_matrix_residuals[jj], _matrix_residuals[jj+1], cl_lambda);
 				}
+				cout << "hash(residuals[" << jj+1 << "]) = " << hash_cl(_matrix_residuals[jj+1]) << endl;
 
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -1049,16 +1064,23 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				const double residual_hash = hash_cl(_matrix_residuals[0]);
 				cout << ",  hash(RESIDUAL) = " << residual_hash;
 
-				printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
-				printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
+				//printFull(cl_phi, "CL_Phi_" + ::to_string(iterations));
+				//printFull(_matrix_residuals[0], "CL_Residual_" + ::to_string(iterations));
 #endif
 				cout << endl;
 			}
 
+#if MAX_ITERATIONS > 0
 			if(iterations > 1000) {
-				cout << "EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
+				cerr << "BiCGStab_CL_Solver: EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
+
+				// Transfer results
+				transferMatrix(cl_phi, phi);
+				// Exit
+				throw "Maximum number of iterations reached";
 				break;
 			}
+#endif
 		} while(norm > tolerance*normRhs);
 		this->_iterations = iterations;
 
