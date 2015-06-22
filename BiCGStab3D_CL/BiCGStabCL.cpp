@@ -676,6 +676,7 @@ bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d *matrix) {
 	return result;
 }
 
+long BiCGStabSolver::iterations(void) { return this->_iterations; }
 
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
@@ -1059,13 +1060,13 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				break;
 			}
 		} while(norm > tolerance*normRhs);
+		this->_iterations = iterations;
 
 		cout << "Completed after " << iterations << " iterations" << endl;
 
 
 		// Transfer results
 		transferMatrix(cl_phi, phi);
-
 
 		// Write result to file
 		printFull(phi, "Result_Phi_CL", false);

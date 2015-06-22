@@ -242,8 +242,9 @@ int main(int argc, char** argv) {
 
 	/* ==== Initialisation of the linear solver ============================ */
 	VERBOSE("  Setting up solver ... ");
+	BiCGStabSolver *bicgsolver = NULL;
 	try {
-		BiCGStabSolver *bicgsolver = new BiCGStabSolver(grid, tolerance, 2, oclContext);
+		bicgsolver = new BiCGStabSolver(grid, tolerance, 2, oclContext);
 		bicgsolver->setVerbose(verbose);
 		bicgsolver->setupContext();
 		solver = bicgsolver;
@@ -350,13 +351,18 @@ int main(int argc, char** argv) {
 	cout << "=======================================================" << endl << endl;
 
 	/* ==== CLEANUP ======================================================== */
+	long iterations = bicgsolver->iterations();
 	VERBOSE("Cleanup ... ");
 	DELETE(solver);
 	DELETE(oclContext);
 
 	// Goodbye message
 	runtime += time_ms();
-	cout << "Total runtime: " << runtime << " ms" << endl;
+	cout << "Total runtime: " << runtime << " ms (" << iterations << " iterations)" << endl;
+	if (verbose) {
+		double avg_runtime = (double)runtime / (double)iterations;
+		cout << "\tAverage: " << avg_runtime << " ms/iterations" << endl;
+	}
 	cout << "Bye" << endl;
     return EXIT_SUCCESS;
 }

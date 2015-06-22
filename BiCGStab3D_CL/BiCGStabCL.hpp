@@ -52,15 +52,23 @@ protected:
 	/** OpenCL context for this accelerated solver */
 	flexCL::Context *_context = NULL;
 
+	/** Grid manager, not used any more */
 	grid_manager *grid;
 
 	/** Status code of the current solver*/
 	int status = 0;
 
+	/** Numerical tolerance when the solver exits */
 	double tolerance;
+
+	/** lValue*/
 	int lValue;
 
+	/** Verbosity flag*/
 	bool verbose;
+
+	/** Stored number of iterations used for solve */
+	long _iterations;
 
 	size_t mx[3];
 	double deltaX[3];
@@ -87,7 +95,6 @@ protected:
 	bool checkMatrix(flexCL::CLMatrix3d *matrix);
 	bool checkMatrix(flexCL::CLMatrix3d &matrix);
 
-
 	void applyBoundary(flexCL::CLMatrix3d* matrix);
 	/**
 	 * Generate the Matrix A*x by using the input matrices phi, lambda and the diffusion matrices Dxx, Dyy, Dzz, Dxy
@@ -112,6 +119,7 @@ public:
 	bool isInitialized(void);
 
 	void setVerbose(bool);
+	long iterations(void);
 
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
