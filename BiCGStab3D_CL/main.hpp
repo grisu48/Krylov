@@ -17,6 +17,7 @@
 #define TEST_TWO 2
 #define TEST_THREE 3
 #define TEST_FOUR 4
+#define TEST_FIVE 5
 
 
 #endif /* MAIN_HPP_ */

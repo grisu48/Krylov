@@ -271,6 +271,32 @@ int main(int argc, char** argv) {
 								((Dxx + Dyy + Dzz)*sqr(pi) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
 					}
 					break;
+					case TEST_FIVE:		// Test 2 (räumliche Diffusion)
+					{
+						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
+						if(ix==mx[0] || iy==mx[1] || iz==mx[2]) {
+							phi_exact(ix,iy,iz) = 0.;
+						}
+
+						diffTens[0](ix,iy,iz) = 1.;
+						diffTens[1](ix,iy,iz) = 1.;
+						diffTens[2](ix,iy,iz) = 1. + 0.00000001*xVal;
+						diffTens[2](ix,iy,iz) = 1.;
+						diffTens[3](ix,iy,iz) = 0.;
+
+						rhs(ix,iy,iz) = -(sqr(pi)*(1. + 0.00000001*xVal + 1. + 1.) +
+								lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
+						rhs(ix,iy,iz) = -(sqr(pi)*(1. + 1. + 1.) +
+								lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
+						/*
+						if(iy==5 && iz==9) {
+							//						cout << ix << " " << rhs(ix,iy,iz) << " " << 1. + 0.00001*xVal + 1. + 1. << endl;
+							cout << ix << " " << phi_ana(ix,iy,iz) << " ";
+							cout << endl;
+						}
+						*/
+					}
+					break;
 
 					default:
 						throw "Illegal test case";
@@ -333,7 +359,7 @@ int main(int argc, char** argv) {
 
 		if(testSwitch == TEST_ONE) {
 			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
-		} else if (testSwitch == TEST_TWO) {
+		} else if (testSwitch == TEST_TWO || testSwitch == TEST_FIVE) {
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8);
 		} else if(testSwitch == TEST_THREE || testSwitch == TEST_FOUR) {
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8, true);
