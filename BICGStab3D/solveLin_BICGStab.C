@@ -916,13 +916,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		}
 
 
-
-		if(iter_steps > 10) {
-			cerr << "STOP iteration " << iter_steps << endl;
-			exit(9);
-		}
-
-
 	} while (norm > eps*normRHS);
 
 	if(rank==0) {
