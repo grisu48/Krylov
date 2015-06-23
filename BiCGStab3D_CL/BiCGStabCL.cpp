@@ -930,7 +930,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 					runtime += time_ms();
 					cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
 					if(initialStep) {
-						initialStep = true;
+						initialStep = false;
 						this->_steptime_min = runtime;
 						this->_steptime_max = runtime;
 					} else {

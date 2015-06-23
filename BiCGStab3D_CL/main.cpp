@@ -454,8 +454,8 @@ int main(int argc, char** argv) {
 	runtime += time_ms();
 	cout << "Total runtime: " << runtime << " ms (" << iterations << " iterations)" << endl;
 	if (verbose) {
-		cout << "               Minimum step time: " << steptimeMin << endl;
-		cout << "               Maximum step time: " << steptimeMax << endl;
+		cout << "               Minimum step time: " << steptimeMin << " ms" << endl;
+		cout << "               Maximum step time: " << steptimeMax << " ms" << endl;
 		double avg_runtime = (double)runtime / (double)iterations;
 		cout << "\tAverage: " << avg_runtime << " ms/iterations" << endl;
 	}
