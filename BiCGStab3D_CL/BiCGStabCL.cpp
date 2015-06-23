@@ -714,7 +714,8 @@ bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d *matrix) {
 }
 
 long BiCGStabSolver::iterations(void) { return this->_iterations; }
-
+long BiCGStabSolver::steptimeMin(void) { return this->_steptime_min; }
+long BiCGStabSolver::steptimeMax(void) { return this->_steptime_max; }
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
 	this->generateAx(phi, residual, lambda, Dxx, Dyy, Dzz, Dxy);
@@ -780,6 +781,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	cout << "BiCGStabSolver::solve_int(...)" << endl;
 #endif
 	if(!isInitialized()) this->setupContext();
+	this->_steptime_min = 0L;
+	this->_steptime_max = 0L;
 
 	/*
 	 * -- Problem description: --
@@ -919,12 +922,21 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		COUT << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 
 		long runtime = -time_ms();
+		bool initialStep = true;
 		do {
 			iterations++;
 			if(this->verbose) {
 				if(iterations > 1) {
 					runtime += time_ms();
 					cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
+					if(initialStep) {
+						initialStep = true;
+						this->_steptime_min = runtime;
+						this->_steptime_max = runtime;
+					} else {
+						if(runtime > this->_steptime_max) this->_steptime_max = runtime;
+						if(runtime < this->_steptime_min) this->_steptime_min = runtime;
+					}
 				} else
 					cout << "Starting iteration " << iterations << " ... " << endl;
 			}

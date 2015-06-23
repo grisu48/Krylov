@@ -74,6 +74,10 @@ protected:
 	/** Diffusion diagonals (D_xx, D_yy, D_zz) */
 	double diffDiag[3];
 
+	long _steptime_min;
+	long _steptime_max;
+
+
 	/* ==== OpenCL variables ==== */
 
 	flexCL::CLMatrix3d *_matrix_rhs, *_matrix_lambda;
@@ -127,6 +131,11 @@ public:
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
 
+	/** Minimum step time for the calculation (Milliseconds) */
+	long steptimeMin(void);
+
+	/** Maximum step time for the calculation (Milliseconds) */
+	long steptimeMax(void);
 };
 
 #endif /* BICGSTABCL_HPP_ */
