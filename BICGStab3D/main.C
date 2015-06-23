@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
+#include <string>
 #include "grid_manager.H"
 #include "BoundaryHandler.H"
 #include "mpi_manager.H"
@@ -43,8 +44,6 @@ static void printMat(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 }
 
-
-
 int main(int argc, char *argv[]) {
 #ifdef parallel
 	int ntasks;
@@ -56,19 +55,65 @@ int main(int argc, char *argv[]) {
 	int rank = 0;
 #endif
 
-	NumArray<int> mx_global(3);
-	mx_global[0] = 32;
-	mx_global[1] = 32;
-	mx_global[2] = 32;
+	// choice of test to be run
+	int switch_test(1);
+	size_t problem_mx = 32;		// Grid size
+	for(int i=1;i<argc;i++) {
+		string arg = string(argv[i]);
+		if(arg.length() <= 0) continue;
+		if(arg.at(0) == '-') {
 
-	int mx1D;
-	if(argc>1) {
-		sscanf(argv[1],"%d",&mx1D);
-		mx_global[0] = mx1D;
-		mx_global[1] = mx1D;
-		// mx[2] = mx1D/2;
-		mx_global[2] = mx1D;
+			if (arg == "-h" || arg == "--help") {
+#ifdef parallel
+				cout << "BiCGStab solver (parallel)" << endl;
+#else
+				cout << "BiCGStab solver (single-core)" << endl;
+#endif
+
+				cout << "Usage: " << argv[0] << " [OPTIONS]" << endl;
+				cout << "OPTIONS:" << endl;
+				cout << "    -h   --help                   Print program help" << endl;
+				cout << "    -n   --size MX                " << endl;
+				cout << "         --mx   MX                Define problem size" << endl;
+				cout << "    -t   --test TEST              Define test case (1-5)" << endl;
+				return EXIT_SUCCESS;
+			} else if(arg == "-n" || arg == "--size" || arg == "--mx") {
+				if(i >= argc-1) {
+					cerr << "Missing argument: Size" << endl;
+					return EXIT_FAILURE;
+				}
+
+				problem_mx = (size_t)atol(argv[++i]);
+			} else if(arg == "-t" || arg == "--test") {
+				if(i >= argc-1) {
+					cerr << "Missing argument: Test" << endl;
+					return EXIT_FAILURE;
+				}
+
+				switch_test = atoi(argv[++i]);
+				if(switch_test < 1 || switch_test > 5) {
+					cerr << "Illegal test number. Must be [1-5] " << endl;
+					return EXIT_FAILURE;
+				}
+				cout << "Using test " << switch_test << endl;
+				if(switch_test == 5) switch_test = -1;
+			} else {
+				cerr << "Illegal argument: " << arg << endl;
+				return EXIT_FAILURE;
+			}
+
+		} else
+			problem_mx = (size_t)atol(argv[i]);
 	}
+
+
+	cout << "Problem size: " << problem_mx << ", running test " << (switch_test==-1?5:switch_test) << endl;
+
+
+	NumArray<int> mx_global(3);
+	mx_global[0] = problem_mx;
+	mx_global[1] = problem_mx;
+	mx_global[2] = problem_mx;
 
 	//int mx[3] = {64,64,64};
 
@@ -163,8 +208,6 @@ int main(int argc, char *argv[]) {
 	DiffTens[2].set_constVal(1.);
 	DiffTens[3].clear();
 
-	// choice of test to be run
-	int switch_test(2);
 
 	double DPar = 1.;
 	double DPerp = 0.1;
