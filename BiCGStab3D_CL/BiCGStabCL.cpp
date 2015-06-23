@@ -1135,7 +1135,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		transferMatrix(cl_phi, phi);
 
 		// Write result to file
-		printFull(phi, "Result_Phi_CL", false);
+		//printFull(phi, "Result_Phi_CL", false);
 
 	} catch (...) {
 		// Emergency cleanup
