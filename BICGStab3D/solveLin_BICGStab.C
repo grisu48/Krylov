@@ -538,7 +538,8 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 						 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
 						      coeff[2]*Dzz(ix,iy,iz)) +
 						  lambda(ix,iy,iz))*psi(ix,iy,iz) +
-						 coeff_xy*Dxy(ix,iy,iz)*(psi(ix+1,iy+1,iz) -
+
+						  coeff_xy*Dxy(ix,iy,iz)*(psi(ix+1,iy+1,iz) -
 						                         psi(ix+1,iy-1,iz) -
 						                         psi(ix-1,iy+1,iz) +
 						                         psi(ix-1,iy-1,iz)) +
@@ -588,10 +589,6 @@ void BICGStab::multiply_withMat(BoundaryHandler3D &bounds,
 	if(apply_bcs) {
 		bounds.do_BCs(vecOut, 1);
 	}
-
-	printFull(psi, "multiplyWithMat_psi");
-	cout << "Written." << endl;
-	exit(8);
 
 }
 
@@ -704,6 +701,19 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	double normRHS = get_l2Norm(rhs);
 	if(normRHS == 0.) normRHS = 1.;
 
+
+#if 0
+	// Write initial matrices
+	cout << "Writing initial matrices to file ... " << endl;
+	printFull(phi, "Initial_phi");
+	printFull(rhs, "Initial_rhs");
+	printFull(lambda, "Initial_lambda");
+	printFull(Dxx, "Initial_Dxx");
+	printFull(Dyy, "Initial_Dyy");
+	printFull(Dzz, "Initial_Dzz");
+	printFull(Dxy, "Initial_Dxy");
+#endif
+
 	cout << "Input variables:" << endl;
 	cout << "\thash(phi)     = " << hash(phi) << endl;
 	cout << "\thash(rhs)     = " << hash(rhs) << endl;
@@ -711,6 +721,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 
 	cout << "  normRHS = " << normRHS << endl;
+
 
 	int iter_steps=0;
 
@@ -780,17 +791,28 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 				//cout << "\thash(uMat[" << ii << "]) = " << hash(uMat[ii]) << endl;
 			}
 
-			// cout << " uMat: " << uMat[0](3,5,0) << endl;
+#if 0
+			cout << "Before multiply_withMat" << endl;
+			cout << "\tuMat[jj] = " << hash(uMat[jj]) << endl;
+			cout << "\tuMat[jj+1] = " << hash(uMat[jj+1]) << endl;
+			cout << "\tlambda = " << hash(lambda) << endl;
+			cout << "\tDxx = " << hash(Dxx) << endl;
+			cout << "\tDyy = " << hash(Dyy) << endl;
+			cout << "\tDzz = " << hash(Dzz) << endl;
+			cout << "\tDxy = " << hash(Dxy) << endl;
+#endif
 			if(use_spatialDiffusion) {
 				multiply_withMat(bounds, uMat[jj], lambda, Dxx, Dyy, Dzz, Dxy, uMat[jj+1]);
 			} else {
 				multiply_withMat(bounds, uMat[jj], lambda, uMat[jj+1]);
 			}
-
-
-			cout << "hash(uMat[jj]) = " << hash(uMat[jj]) << endl;
-			cout << "hash(uMat[jj+1]) = " << hash(uMat[jj+1]) << endl;
+#if 0
+			cout << "generateAx completed for uMat[jj+1]" << endl;
+			cout << "hash(uMat[jj = " << jj << "]) = " << hash(uMat[jj]) << endl;
+			cout << "hash(uMat[jj+1 = " << jj+1 << "]) = " << hash(uMat[jj+1]) << endl;
+			printFull(uMat[jj+1], "Ax");
 			exit(8);
+#endif
 			//cout << "hash(lambda) = " << hash(lambda) << endl;
 
 			//cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
@@ -895,7 +917,10 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 
 
 
-
+		if(iter_steps > 10) {
+			cerr << "STOP iteration " << iter_steps << endl;
+			exit(9);
+		}
 
 
 	} while (norm > eps*normRHS);

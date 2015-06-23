@@ -34,7 +34,7 @@ using namespace flexCL;
 
 // Verbose output
 #ifndef VERBOSE
-#define VERBOSE 1
+#define VERBOSE 0
 #endif
 // Profiling mode on or off
 #ifndef PROFILING
@@ -42,7 +42,7 @@ using namespace flexCL;
 #endif
 
 #ifndef TESTING
-#define TESTING 1
+#define TESTING 0
 #endif
 
 // Tolerance for numerical operations
@@ -55,7 +55,7 @@ using namespace std;
 using namespace flexCL;
 
 // Maximum number of iterations before the solver quits or negative number, if this check should be disabled
-#define MAX_ITERATIONS 10000L
+#define MAX_ITERATIONS 1000L
 
 // Equal comparison for two floating point values
 #define REAL_EQUAL(x,y) { fabs(x-y)<epsilon*(y/x) }
@@ -229,24 +229,35 @@ inline std::string f_filename(const char* filename) {
 
 void printFull(NumMatrix<double, 3> &matrix, const char* filename, bool relativePath = true) {
 	ofstream out;
-	std::string fname;
-	if(relativePath) {
+	string fname;
+	if (relativePath) {
 		fname = f_filename(filename);
-		out.open(fname.c_str());
+
 	} else
-		out.open(filename);
+		fname = string(filename);
+	out.open(fname.c_str());
+#if TESTING == 1
+	cout << "\tWriting NumMatrix to " << fname << " ... "; cout.flush();
+#endif
 	printFull(matrix, out);
+	cout << "done" << endl;
 	out.close();
 }
 
 void printFull(flexCL::CLMatrix3d *matrix, const char* filename, bool relativePath = true) {
 	ofstream out;
+	string fname;
 	if (relativePath) {
-		std::string fname = f_filename(filename);
-		out.open(fname.c_str());
+		fname = f_filename(filename);
+
 	} else
-		out.open(filename);
+		fname = string(filename);
+	out.open(fname.c_str());
+#if TESTING == 1
+	cout << "\tWriting NumMatrix to " << fname << " ... "; cout.flush();
+#endif
 	printFull(matrix, out);
+	cout << "done" << endl;
 	out.close();
 }
 void printFull(flexCL::CLMatrix3d *matrix, string filename) {
@@ -319,6 +330,17 @@ size_t compareMatrices(NumMatrix<double,3> mat1, CLMatrix3d* mat2, ostream &out 
 
 }
 
+
+
+/* ==== INTERNAL DEFINES ======================================================================= */
+
+// This is not intended to be edited by the user!
+#if VERBOSE == 1 && TESTING == 1
+#define COUT cout
+#else
+// Should normally never trigger
+#define COUT if(false) cout
+#endif
 
 
 /* ==== ACTUAL BICGSTAB SOLVER SECTION ========================================================= */
@@ -598,7 +620,7 @@ void BiCGStabSolver::applyBoundary(CLMatrix3d* matrix) {
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
-	applyBoundary(phi);
+	applyBoundary(phi);		// XXX: Could we switch that off?
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 	if(!this->checkMatrix(phi)) throw "generateAx_Full Preliminary check failed for phi";
@@ -624,10 +646,9 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_clKernelGenerateAx_Full->setArgument(11, this->deltaX[0]);
 	this->_clKernelGenerateAx_Full->setArgument(12, this->deltaX[1]);
 	this->_clKernelGenerateAx_Full->setArgument(13, this->deltaX[2]);
-	this->_clKernelGenerateAx_Full->setArgument(14, 1.0); //this->diffDiag[0]);
-	this->_clKernelGenerateAx_Full->setArgument(15, 1.0); //this->diffDiag[1]);
-	this->_clKernelGenerateAx_Full->setArgument(16, 1.0); //this->diffDiag[2]);
 
+
+	// (!!) When enqueueing use only mx without ghost cells!
 	this->_clKernelGenerateAx_Full->enqueueNDRange(this->mx[0], this->mx[1], this->mx[2]);
 
 #if PROFILING == 1
@@ -639,11 +660,9 @@ void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst
 	this->_context->join();
 	if(!this->checkMatrix(dst)) throw "generateAx_Full produces illegal values in dst";
 #endif
+
 	applyBoundary(dst);
 
-	printFull(dst, "Ax_Cl");
-	cout << "Written." << endl;
-	exit(8);
 }
 
 void BiCGStabSolver::generateAx(flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* dst, flexCL::CLMatrix3d* lambda) {
@@ -852,6 +871,18 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	cout << "\thash(lambda)  = " << hash_cl(cl_lambda) << endl;
 #endif
 
+#if 0
+	// Write initial matrices to file
+	cout << "Write inital matrices to file ... " << endl;
+	printFull(cl_phi, "CL_Initial_phi");
+	printFull(cl_rhs, "CL_Initial_rhs");
+	printFull(cl_lambda, "CL_Initial_lambda");
+	printFull(cl_Dxx, "CL_Initial_Dxx");
+	printFull(cl_Dyy, "CL_Initial_Dyy");
+	printFull(cl_Dzz, "CL_Initial_Dzz");
+	printFull(cl_Dxy, "CL_Initial_Dxy");
+#endif
+
 	try {
 		unsigned long iterations = 0;
 		double normRhs = cl_rhs->l2Norm();
@@ -885,7 +916,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		//printFull(_matrix_residuals[0], "CL_PRIM_RESIDUAL");
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
-		cout << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		COUT << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
 
 		long runtime = -time_ms();
 		do {
@@ -901,37 +932,37 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			cout << "hash(phi) = " << hash_cl(cl_phi) << endl;
 #endif
 			runtime = -time_ms();
-			cout << "omega = " << omega << endl;
+			COUT << "omega = " << omega << endl;
 
 			rho0 *= -omega;
-			cout << "rho0 = " << rho0 << endl;
+			COUT << "rho0 = " << rho0 << endl;
 
 			// ==== BI-CG PART ============================================= //
-			 cout << "BI-CG part of the solver ... " << endl;
+			COUT << "BI-CG part of the solver ... " << endl;
 
 
 			for(int jj=0; jj<lValue; ++jj) {
-				cout << "jj iteration " << jj << endl;
+				COUT << "jj iteration " << jj << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_matrix_residuals[jj])) throw "matrix_residual check 1 failed";
 #endif
 
-				cout << "hash(residual[" << jj << "]) = " << hash_cl(this->_matrix_residuals[jj]) << endl;
+				//cout << "hash(residual[" << jj << "]) = " << hash_cl(this->_matrix_residuals[jj]) << endl;
 
 
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
-				cout << "\trho1 = " << rho1 << endl;
+				COUT << "\trho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
-				cout << "\tbeta = " << beta << endl;
+				COUT << "\tbeta = " << beta << endl;
 
 				for(int ii=0; ii<=jj; ++ii) {
-					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->mul(-beta);
-					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->add(_matrix_residuals[ii]);
-					cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
+					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -943,7 +974,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda, cl_Dxx, cl_Dyy, cl_Dzz, cl_Dxy);
 				else
 					generateAx(_uMat[jj], _uMat[jj+1], cl_lambda);
-				cout << "hash(uMat[" << jj+1 << "]) = " << hash_cl(_uMat[jj+1]) << endl;
+
+
 				//printFull(_uMat[jj], "CL_uMat");
 				//printFull(cl_lambda, "CL_Lambda");
 				//printFull(_uMat[jj+1], "CL_Ax");
@@ -964,7 +996,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
-				cout << "\talpha = " << alpha << endl;
+				COUT << "\talpha = " << alpha << endl;
 
 				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
@@ -979,7 +1011,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				} else {
 					generateAx(_matrix_residuals[jj], _matrix_residuals[jj+1], cl_lambda);
 				}
-				cout << "hash(residuals[" << jj+1 << "]) = " << hash_cl(_matrix_residuals[jj+1]) << endl;
+				//cout << "hash(residuals[" << jj+1 << "]) = " << hash_cl(_matrix_residuals[jj+1]) << endl;
 
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
@@ -1058,7 +1090,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			if(this->verbose) {
 				cout << "Iteration " << iterations << ": NORM = " << norm;
 
-#if TESTING == 1
+#if TESTING == 1 && VERBOSE == 1
 				const double phi_hash = hash_cl(cl_phi);
 				cout << " hash(PHI) = " << phi_hash;
 				const double residual_hash = hash_cl(_matrix_residuals[0]);
@@ -1070,8 +1102,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				cout << endl;
 			}
 
-#if MAX_ITERATIONS > 0
-			if(iterations > 1000) {
+#if MAX_ITERATIONS > 0L
+			if(iterations > MAX_ITERATIONS) {
 				cerr << "BiCGStab_CL_Solver: EMERGENCY BREAK (no_iteration = " << iterations << ")" << endl;
 
 				// Transfer results
@@ -1084,7 +1116,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		} while(norm > tolerance*normRhs);
 		this->_iterations = iterations;
 
-		cout << "Completed after " << iterations << " iterations" << endl;
+		if(verbose) cout << "Completed after " << iterations << " iterations" << endl;
 
 
 		// Transfer results

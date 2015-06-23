@@ -55,13 +55,14 @@ __kernel void boundary(__global REAL* matrix, size_t mx, size_t my, size_t mz, s
 	// XXX: OpenCL Divergence in x and z direction :-(
 	bool _isBoundary = (x <= 0 || y <= 0 || z <= 0) || (x >= mx || y >= my || z >= mz);
 	if(_isBoundary) {
+		// Reminder: Here mx = mx (NOT mx + 2*rim!!)
 		matrix[matrix_index(x+rim,y+rim,z+rim,mx+2*rim,my+2*rim,mz+2*rim)] = 0.0;
 	}
 }
 
 
 
-__kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __global REAL* Dxx, __global REAL* Dyy, __global REAL* Dzz, __global REAL* Dxy, __global REAL* dst, size_t mx, size_t my, size_t mz, size_t rim, REAL deltaX, REAL deltaY, REAL deltaZ, REAL diffDiagX, REAL diffDiagY, REAL diffDiagZ) {
+__kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __global REAL* Dxx, __global REAL* Dyy, __global REAL* Dzz, __global REAL* Dxy, __global REAL* dst, size_t mx, size_t my, size_t mz, size_t rim, REAL deltaX, REAL deltaY, REAL deltaZ) {
 	// NOTE: Here mx = mx + 2*rim, same goes for my and mz!
 
 	// Since the BiCGStab kernel is transparent for RIM cells, we have to add them here.
@@ -71,52 +72,43 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 	const size_t index = matrix_index(x,y,z,mx,my,mz);
 	REAL result = 0.0;
 
-	const REAL coeff[3] = { diffDiagX/sqr(deltaX), diffDiagY/sqr(deltaY), diffDiagZ/sqr(deltaZ) };
-	const REAL coeff_xy = 1.0 / (2.0 * coeff[0] * coeff[1]);
+	const REAL coeff[3] = { 1.0/sqr(deltaX), 1.0/sqr(deltaY), 1.0/sqr(deltaZ) };
+	const REAL coeff_xy = 1.0 / (2.0 * deltaX * deltaY);
 
 	
 	/*
-	(coeff[0]*Dxx(ix,iy,iz)*(psi(ix+1,iy,iz) +
-							                         psi(ix-1,iy,iz)) +
-							 coeff[1]*Dyy(ix,iy,iz)*(psi(ix,iy+1,iz) +
-							                         psi(ix,iy-1,iz)) +
-							 coeff[2]*Dzz(ix,iy,iz)*(psi(ix,iy,iz+1) +
-							                         psi(ix,iy,iz-1)) -
-							 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
-							      coeff[2]*Dzz(ix,iy,iz)) +
-							  lambda(ix,iy,iz))*psi(ix,iy,iz) +
-							 coeff_xy*Dxy(ix,iy,iz)*(psi(ix+1,iy+1,iz) -
-							                         psi(ix+1,iy-1,iz) -
-							                         psi(ix-1,iy+1,iz) +
-							                         psi(ix-1,iy-1,iz))
-													 
-													 + [...]
-	*/
+	 * vecOut(ix,iy,iz) =
+						(coeff[0]*Dxx(ix,iy,iz)*(psi(ix+1,iy,iz) +
+						                         psi(ix-1,iy,iz)) +
+						 coeff[1]*Dyy(ix,iy,iz)*(psi(ix,iy+1,iz) +
+						                         psi(ix,iy-1,iz)) +
+						 coeff[2]*Dzz(ix,iy,iz)*(psi(ix,iy,iz+1) +
+						                         psi(ix,iy,iz-1)) -
+						 (2.*(coeff[0]*Dxx(ix,iy,iz) + coeff[1]*Dyy(ix,iy,iz) +
+						      coeff[2]*Dzz(ix,iy,iz)) +
+						  lambda(ix,iy,iz))*psi(ix,iy,iz) +
+
+						  coeff_xy*Dxy(ix,iy,iz)*(psi(ix+1,iy+1,iz) -
+						                         psi(ix+1,iy-1,iz) -
+						                         psi(ix-1,iy+1,iz) +
+						                         psi(ix-1,iy-1,iz)) +
+						 ((Dxx(ix+1,iy,iz) - Dxx(ix-1,iy,iz))/(2.*delx[0]) +
+						  (Dxy(ix,iy+1,iz) - Dxy(ix,iy-1,iz))/(2.*delx[1]))*
+						 (psi(ix+1,iy,iz) - psi(ix-1,iy,iz))/(2.*delx[0]) +
+						 ((Dxy(ix+1,iy,iz) - Dxy(ix-1,iy,iz))/(2.*delx[0]) +
+						  (Dyy(ix,iy+1,iz) - Dyy(ix,iy-1,iz))/(2.*delx[1]))*
+						 (psi(ix,iy+1,iz) - psi(ix,iy-1,iz))/(2.*delx[1]) +
+						 ((Dzz(ix,iy,iz+1) - Dzz(ix,iy,iz-1))/(2.*delx[2]))*
+						 (psi(ix,iy,iz+1) - psi(ix,iy,iz-1))/(2.*delx[2]));
+	 */
 	
 	// Build matrix
-	result  = coeff[0] * Dxx[index] * (psi[matrix_index(x+1,y,z,mx,my,mz)] + psi[matrix_index(x-1,y,z,mx,my,mz)]);
-	result += coeff[1] * Dyy[index] * (psi[matrix_index(x,y+1,z,mx,my,mz)] + psi[matrix_index(x,y-1,z,mx,my,mz)]);
-	result += coeff[2] * Dzz[index] * (psi[matrix_index(x,y,z+1,mx,my,mz)] + psi[matrix_index(x,y,z+1,mx,my,mz)]);
+	result += coeff[0] * Dxx[index] * (psi[matrix_index(x+1,y  ,z   ,mx,my,mz)] + psi[matrix_index(x-1,y  ,z  ,mx,my,mz)]);
+	result += coeff[1] * Dyy[index] * (psi[matrix_index(x  ,y+1,z   ,mx,my,mz)] + psi[matrix_index(x  ,y-1,z  ,mx,my,mz)]);
+	result += coeff[2] * Dzz[index] * (psi[matrix_index(x  ,   y,z+1,mx,my,mz)] + psi[matrix_index(x  ,y  ,z-1,mx,my,mz)]);
 
-	result -= ( 2.0 * (coeff[0] * Dxx[index] + coeff[1] * Dyy[index] + coeff[2] * Dzz[index] ));
-	result += lambda[index] * psi[index];
+	result -= ( 2.0 * (coeff[0]*Dxx[index] + coeff[1]*Dyy[index] + coeff[2]*Dzz[index]) + lambda[index]) * psi[index];
 	result += coeff_xy * Dxy[index] * ( psi[matrix_index(x+1,y+1,z,mx,my,mz)] - psi[matrix_index(x+1,y-1,z,mx,my,mz)] + psi[matrix_index(x-1,y-1,z,mx,my,mz)] - psi[matrix_index(x-1,y+1,z,mx,my,mz)]);
-	
-	/*
-	 * 
-	 * 												[...]
-													 
-													 +
-							 ((Dxx(ix+1,iy,iz) - Dxx(ix-1,iy,iz))/(2.*delx[0]) +
-							  (Dxy(ix,iy+1,iz) - Dxy(ix,iy-1,iz))/(2.*delx[1]))*
-							 (psi(ix+1,iy,iz) - psi(ix-1,iy,iz))/(2.*delx[0]) +
-							 ((Dxy(ix+1,iy,iz) - Dxy(ix-1,iy,iz))/(2.*delx[0]) +
-							  (Dyy(ix,iy+1,iz) - Dyy(ix,iy-1,iz))/(2.*delx[1]))*
-							 (psi(ix,iy+1,iz) - psi(ix,iy-1,iz))/(2.*delx[1]) +
-							 ((Dzz(ix,iy,iz+1) - Dzz(ix,iy,iz-1))/(2.*delx[2]))*
-							 (psi(ix,iy,iz+1) - psi(ix,iy,iz-1))/(2.*delx[2]));
-	 * 
-	 */
 	
 	REAL tmp;
 	
@@ -129,9 +121,11 @@ __kernel void generateAx_Full(__global REAL* psi, __global REAL* lambda, __globa
 	tmp += (Dxy[matrix_index(x+1,y  ,z  ,mx,my,mz)] - Dxy[matrix_index(x-1,y  ,z  ,mx,my,mz)]) / (2.0 * deltaX);
 	tmp *= (psi[matrix_index(x  ,y+1,z  ,mx,my,mz)] - psi[matrix_index(x  ,y-1,z  ,mx,my,mz)]) / (2.0 * deltaY);
 	result += tmp;
+
+	tmp = (Dzz[matrix_index(x,y,z+1,mx,my,mz)] - Dzz[matrix_index(x,y,z-1,mx,my,mz)]) / (2.0 * deltaZ) *
+			(psi[matrix_index(x,y,z+1,mx,my,mz)] - psi[matrix_index(x,y,z-1,mx,my,mz)]) / (2.0 * deltaZ);
+
 	
-	tmp  = (Dzz[matrix_index(x  ,y  ,z+1,mx,my,mz)] - Dzz[matrix_index(x  ,y  ,z-1,mx,my,mz)]) / (2.0 * deltaZ);
-	tmp *= (psi[matrix_index(x  ,y  ,z+1,mx,my,mz)] - psi[matrix_index(x  ,y  ,z-1,mx,my,mz)]) / (2.0 * deltaZ);
 	result += tmp;
 	
 	// Done

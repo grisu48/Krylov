@@ -391,7 +391,7 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		cout << "Maximum error: " << max_error << endl;
+		cout << "Maximum error on total grid: " << max_error << endl;
 
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
