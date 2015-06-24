@@ -15,6 +15,7 @@
 #include <string>
 #include <cstdlib>
 #include <cmath>
+#include <ctime>
 #include <unistd.h>
 #include <signal.h>
 #include "LinSolver3D.hpp"
@@ -33,45 +34,18 @@ using namespace flexCL;
 // Default size
 #define SIZE 32
 
-#if 0
-static void printMatXY(NumMatrix<double, 3> &mat, int z, ostream &out = cout) {
-	ssize_t low[3];
-	ssize_t high[3];
-	for(int i=0;i<3;i++) {
-		low[i] = mat.getLow(i);
-		high[i] = mat.getHigh(i);
-	}
-
-	int rows = 0;
-	for(ssize_t x=low[0]; x<high[0]; x++) {
-		out << ++rows << "\t|";
-		for(ssize_t y=low[1]; y<high[1]; y++) {
-			out << '\t' << mat(x,y,z);
-		}
-		out << '\n';
-	}
-	out.flush();
-}
-static void printMat(NumMatrix<double, 3> &mat, ostream &out = cout) {
-	const ssize_t low = mat.getLow(2);
-	const ssize_t high = mat.getHigh(2);
-
-	for(ssize_t z = low; z < high; z++) {
-		printMatXY(mat, z, out);
-	}
-}
-#endif
-
 /* ==== Program configuration ==== */
 static size_t size = SIZE;
 static bool verbose = false;
 static long runtime = -time_ms();
 // Desired OpenCL context
 static int opencl_context = OCL_CONTEXT_DEFAULT;
-
+/** Test switch */
 static int testSwitch = TEST_ONE;
-/* Tolerance for the computation */
+/** Tolerance for the computation */
 static double tolerance = 1e-6;
+/** Randomize input parameters */
+static bool randomize = false;
 
 /* ==== Function prototypes ================================================ */
 
@@ -84,13 +58,24 @@ static void sig_handler(int);
 /** Check given matrix for illegal values */
 static bool checkMatrix(NumMatrix<double,3>&);
 
+/** Random double float */
+static inline double randomf(double min = 0.0, double max = 1.0);
+
 /* ==== MAIN PROGRAM FUNCTION ============================================== */
 
 int main(int argc, char** argv) {
     cout << " -- BiCGStab 3D Linear solver (OpenCL) --" << endl;
     signal(SIGINT, sig_handler);
     signal(SIGUSR1, sig_handler);
+    signal(SIGTERM, sig_handler);
     //signal(SIGSEGV, sig_handler);
+
+    // Runtime variables
+    long ocl_setup_time;
+    long total_init_time;
+    long problem_init_time;
+    long solver_setup_time;
+
 
 	/* ====== Problem variable declaration ====== */
 	Linsolver3D *solver = NULL;
@@ -115,6 +100,17 @@ int main(int argc, char** argv) {
 			} else if(arg == "-t" || arg == "--test") {
 				if(isLast) throw "Missing argument: Test case";
 				testSwitch = atoi(argv[++i]);
+			} else if(arg == "-p" || arg == "--precision" || arg == "--tolerance") {
+				if(isLast) throw "Missing argument: Tolerance";
+				const double tol = atof(argv[++i]);
+				if(tol <= 0) throw "Illegal argument: Tolerance zero or negative";
+				tolerance = tol;
+			} else if(arg == "-r" || arg == "--random" || arg == "--randomize") {
+				randomize = true;
+				// Initialize random generator
+				time_t seed = time(NULL);
+				cout << "\tInitialize random generator. Seed = " << seed << endl;
+				srand(seed);
 			} else
 				throw "Illegal argument";
 		} catch(const char* msg) {
@@ -124,6 +120,8 @@ int main(int argc, char** argv) {
 	}
 
 	/* ==== OpenCL Initialisation ========================================== */
+	ocl_setup_time = -time_ms();
+	total_init_time = -time_ms();
     VERBOSE("  OpenCL initialisation ... ");
     OpenCL openCl;
 	Context *oclContext = NULL;
@@ -148,9 +146,11 @@ int main(int argc, char** argv) {
     	cerr << "Error setting up OpenCL context: " << e.what() << endl;
     	return EXIT_FAILURE;
     }
+    ocl_setup_time += time_ms();
 
 
     /* ==== Problem initialisation ========================================= */
+    problem_init_time = -time_ms();
 	static size_t mx[3] = {size, size, size };
 	static size_t Nx_global[3] { size+1, size+1, size+1 };
 
@@ -183,6 +183,10 @@ int main(int argc, char** argv) {
 	const double dPar = 1.0;
 	const double dPerp = 0.1;
 
+	// Randomized values
+	double lambda_factor = 0.2;
+	double diffTensFactor[4];
+
 	// Setting grid values
 	try {
 		diffTens[0].set_constVal(1.0);
@@ -199,6 +203,20 @@ int main(int argc, char** argv) {
 		rhs.clear();
 
 		const double pi = M_PI;
+
+		// Randomize
+		if(randomize) {
+			lambda_factor = randomf(0.1, 100.0);
+			cout << "\tRandom lambda factor = " << lambda_factor << endl;
+			for(int i=0;i<4;i++){
+				diffTensFactor[i] = 1.0; // randomf(0.1,10.0);
+				cout << "\tRandom diffTens[" << i << "] = " << diffTensFactor[i] << endl;
+			}
+		} else {
+			lambda_factor = 0.2;
+			for(int i=0;i<4;i++) diffTensFactor[i] = 1.0;
+		}
+
 		for(size_t iz = 0; iz <= mx[2]; ++iz) {
 			const double zVal = grid.get_Pos(2,iz);
 			for(size_t iy = 0; iy <= mx[1]; ++iy) {
@@ -208,8 +226,9 @@ int main(int argc, char** argv) {
 
 					// cout << "[" << ix << "," << iy << "," << iz << "] = (" << xVal << "," << yVal << "," << zVal << ")" << endl;
 
+
 					phi_exact(ix,iy,iz) = sin(M_PI * xVal)*sin(M_PI * yVal)*sin(M_PI * zVal);
-					lambda(ix,iy,iz) = 0.2*xVal*sqr(yVal)*zVal;
+					lambda(ix,iy,iz) = lambda_factor*xVal*sqr(yVal)*zVal;
 
 
 
@@ -221,20 +240,20 @@ int main(int argc, char** argv) {
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 
-						diffTens[0](ix,iy,iz) = yVal;
-						diffTens[1](ix,iy,iz) = xVal;
-						diffTens[2](ix,iy,iz) = zVal;
+						diffTens[0](ix,iy,iz) = diffTensFactor[0] * yVal;
+						diffTens[1](ix,iy,iz) = diffTensFactor[1] * xVal;
+						diffTens[2](ix,iy,iz) = diffTensFactor[2] * zVal;
 						rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) + pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal);
 					}
 						break;
 					case TEST_THREE:	// Test 3 (räumliche Diffusion mit D_xy)
 					{
 						double AVal = 0.1;//1.8;
-						diffTens[0](ix,iy,iz) = yVal;
-						diffTens[1](ix,iy,iz) = xVal;
-						diffTens[2](ix,iy,iz) = zVal;
+						diffTens[0](ix,iy,iz) = diffTensFactor[1] * yVal;
+						diffTens[1](ix,iy,iz) = diffTensFactor[2] * xVal;
+						diffTens[2](ix,iy,iz) = diffTensFactor[3] * zVal;
 						// DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
-						diffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
+						diffTens[3](ix,iy,iz) = diffTensFactor[4] * AVal*sqr(xVal)*yVal*zVal;
 						const double D_xy = diffTens[3](ix,iy,iz);
 						rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) +
 								pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal) +
@@ -247,10 +266,10 @@ int main(int argc, char** argv) {
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 						const double angle = atan2(yVal, xVal);
-						diffTens[0](ix,iy,iz) = (dPar*sqr(sin(angle)) + dPerp*sqr(cos(angle)));
-						diffTens[1](ix,iy,iz) = (dPar*sqr(cos(angle)) + dPerp*sqr(sin(angle)));
-						diffTens[2](ix,iy,iz) = dPerp;
-						diffTens[3](ix,iy,iz) = (dPerp - dPar)*sin(angle)*cos(angle);
+						diffTens[0](ix,iy,iz) = diffTensFactor[0] * (dPar*sqr(sin(angle)) + dPerp*sqr(cos(angle)));
+						diffTens[1](ix,iy,iz) = diffTensFactor[1] * (dPar*sqr(cos(angle)) + dPerp*sqr(sin(angle)));
+						diffTens[2](ix,iy,iz) = diffTensFactor[2] * dPerp;
+						diffTens[3](ix,iy,iz) = diffTensFactor[3] * (dPerp - dPar)*sin(angle)*cos(angle);
 
 						const double Dxx = diffTens[0](ix,iy,iz);
 						const double Dyy = diffTens[1](ix,iy,iz);
@@ -278,11 +297,11 @@ int main(int argc, char** argv) {
 							phi_exact(ix,iy,iz) = 0.;
 						}
 
-						diffTens[0](ix,iy,iz) = 1.;
-						diffTens[1](ix,iy,iz) = 1.;
-						diffTens[2](ix,iy,iz) = 1. + 0.00000001*xVal;
-						diffTens[2](ix,iy,iz) = 1.;
-						diffTens[3](ix,iy,iz) = 0.;
+						diffTens[0](ix,iy,iz) = diffTensFactor[0];
+						diffTens[1](ix,iy,iz) = diffTensFactor[1];
+						//diffTens[2](ix,iy,iz) = 1. + 0.00000001*xVal;
+						diffTens[2](ix,iy,iz) = diffTensFactor[2];
+						diffTens[3](ix,iy,iz) = 0.0;
 
 						rhs(ix,iy,iz) = -(sqr(pi)*(1. + 0.00000001*xVal + 1. + 1.) +
 								lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
@@ -310,6 +329,7 @@ int main(int argc, char** argv) {
 		cerr << "Error setting up grid values: " << msg << endl;
 		return EXIT_FAILURE;
 	}
+	problem_init_time += time_ms();
 
 	/* Pre-run test to check if any illegal values are in the matrices */
 	try {
@@ -331,6 +351,7 @@ int main(int argc, char** argv) {
 
 	/* ==== Initialisation of the linear solver ============================ */
 	VERBOSE("  Setting up solver ... ");
+	solver_setup_time = -time_ms();
 	BiCGStabSolver *bicgsolver = NULL;
 	try {
 		bicgsolver = new BiCGStabSolver(grid, tolerance, 2, oclContext);
@@ -346,11 +367,12 @@ int main(int argc, char** argv) {
 		cerr << "OpenCL exception: " << e.what() << endl;
 		return EXIT_FAILURE;
 	}
-
+	solver_setup_time += time_ms();
 
 
 	/* ==== Solver ========================================================= */
 	VERBOSE("Problem setup complete.");
+	total_init_time += time_ms();
 	long calc_runtime = -time_ms();
 	cout << endl << "=======================================================" << endl;
 	cout << "  Running calculation ... " << endl;
@@ -358,10 +380,13 @@ int main(int argc, char** argv) {
 	try {
 
 		if(testSwitch == TEST_ONE) {
+			if(verbose) cout << "Solving with diagonal diffusion matrix ... " << endl;
 			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
 		} else if (testSwitch == TEST_TWO || testSwitch == TEST_FIVE) {
+			if(verbose) cout << "Solving with arbitrary diffusion matrix ... " << endl;
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8);
 		} else if(testSwitch == TEST_THREE || testSwitch == TEST_FOUR) {
+			if(verbose) cout << "Solving with arbitrary diffusion matrix with off-diagonal elements ... " << endl;
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8, true);
 		} else {
 			cerr << "UNKNOWN TEST SWITCH: " << testSwitch << endl;
@@ -389,6 +414,7 @@ int main(int argc, char** argv) {
 
 		// Detailed look at solution
 		// Now let's have a look:
+#if 0
 		if(verbose) {
 			cout << "Detailed look at solution: " << endl;
 			for(size_t iz = 0; iz <= mx[2]; ++iz) {
@@ -403,6 +429,7 @@ int main(int argc, char** argv) {
 				}
 			}
 		}
+#endif
 
 		// Search for maximum error
 		double max_error = -1.0;
@@ -417,7 +444,7 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		cout << "Maximum error on total grid: " << max_error << endl;
+		cout << "Maximum error found on grid: " << max_error << endl;
 
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
@@ -450,15 +477,41 @@ int main(int argc, char** argv) {
 	DELETE(solver);
 	DELETE(oclContext);
 
-	// Goodbye message
+	// Statistics
 	runtime += time_ms();
-	cout << "Total runtime: " << runtime << " ms (" << iterations << " iterations)" << endl;
-	if (verbose) {
-		cout << "               Minimum step time: " << steptimeMin << " ms" << endl;
-		cout << "               Maximum step time: " << steptimeMax << " ms" << endl;
-		double avg_runtime = (double)runtime / (double)iterations;
-		cout << "\tAverage: " << avg_runtime << " ms/iterations" << endl;
+
+	if(verbose) {
+		cout << " ==== Time statistics ==== " << endl;
+		cout << "\tCalculation time               : " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
+		cout << "\tTotal runtime                  : " << runtime << " ms" << endl;
+	} else {
+		cout << "\tCalculation time: " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
+		cout << "\tTotal runtime:    " << runtime << " ms" << endl;
 	}
+	if (verbose) {
+		cout << "\t  Minimum step time            : " << steptimeMin << " ms" << endl;
+		cout << "\t  Maximum step time            : " << steptimeMax << " ms" << endl;
+		double avg_runtime = (double)runtime / (double)iterations;
+		cout << "\t  Average step time            : " << avg_runtime << " ms/iterations" << endl;
+		cout << endl;
+		cout << "\tOpenCL setup time              : " << ocl_setup_time << " ms" << endl;
+		cout << "\tTotal initialisation time      : " << total_init_time << " ms" << endl;
+		cout << "\tProblem initialisation time    : " << problem_init_time << " ms" << endl;
+		cout << "\tSolver setup time              : " << solver_setup_time << " ms" << endl;
+
+		cout << endl << " ==== Numerics ==== " << endl;
+		cout << "\tTolerance: " << tolerance << endl;
+
+		if (randomize) {
+			cout << endl;
+			cout << " ==== Randomized input ==== " << endl;
+			cout <<"\tLambda factor: " << lambda_factor << endl;
+			for(int i=0;i<4;i++)
+				cout << "\tdiffTensFactor[" << i << "] = " << diffTensFactor[i] << endl;
+		}
+	}
+
+	// Goodbye :-)
 	cout << "Bye" << endl;
     return EXIT_SUCCESS;
 }
@@ -477,11 +530,13 @@ static void printHelp(string programName) {
     cout << "         --cpu                    Use CPU context (OpenCL)" << endl;
     cout << "         --gpu                    Use GPU context (OpenCL)" << endl;
     cout << "    -t --test TEST                Set test case to TEST" << endl;
+    cout << "    -p --tolerance TOL            Set tolerance to TOL" << endl;
 }
 
 
 static void sig_handler(int sig_no) {
 	switch(sig_no) {
+	case SIGTERM:
 	case SIGINT:
 	case SIGUSR1:
 		cerr << "User termination request." << endl;
@@ -518,4 +573,9 @@ static bool checkMatrix(NumMatrix<double,3> &matrix) {
 	}
 
 	return true;
+}
+
+static double randomf(double min, double max) {
+	const double diff = max-min;
+	return min + (double)rand()/(double)(RAND_MAX/diff);
 }

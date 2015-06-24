@@ -19,14 +19,19 @@ public:
 	Linsolver3D() {}
 	virtual ~Linsolver3D() {}
 
+	/** Solve with diagonal diffusion matrix */
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			double D_xx, double D_yy, double D_zz, int debug=0) = 0;
+	/** Solve with arbitrary diffusion matrix */
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
 			int debug=0, bool use_offDiagDiffusion=false) = 0;
+
+protected:
+	/** Internal solver routine */
 	virtual void solve_int(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
