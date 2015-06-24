@@ -370,6 +370,10 @@ BiCGStabSolver::BiCGStabSolver(grid_manager &grid, double tolerance, int lValue,
 	this->_clKernelGenerateAx_Full = NULL;
 	this->_clKernelGenerateAx_NoSpatial = NULL;
 	this->_clKernelBoundary = NULL;
+	this->_steptime_min = 0;
+	this->_steptime_max = 0;
+	this->_iterations = 0;
+	this->verbose = false;
 
 }
 

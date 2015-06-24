@@ -36,7 +36,7 @@ BoundaryHandler2D::BoundaryHandler2D(mpi_manager_2D YourMPI, int type) : Boundar
 #endif
 
 BoundaryHandler2D::BoundaryHandler2D(int type) : BoundaryHandler(2, type) {
-	
+
 }
 
 
@@ -48,6 +48,7 @@ BoundaryHandler::BoundaryHandler(int DIM, int bcType, int test_case) {
 	// (3) -> MPI periodic
 
 	this->DIM = DIM;
+	this->test_case = 0;
 
 	if(test_case>0) {
 		is_testRun = true;
@@ -106,7 +107,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
                                     double &S_lower, double &S_upper,
                                     double delt, int type) const {
 	//! Boundary conditions for momentum direction
-	
+
 	/*!  For the lower boundary in the momentum direction we assume a
 	  constant power law of the form spec = A p^-s, where A and s are
 	  computed from the two gridpoints next to the
@@ -156,7 +157,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 	// Same for upper boundary
 	int mx = TheGrid.get_mx();
 	int Nx = TheGrid.get_Nx();
-	
+
 	// cout << " En Iks " << mx << " " << Nx << endl;
 	// exit(2);
 	// SVal = log(spec(mx-1)/spec(mx))/log(TheGrid.get_xCen(mx)/
@@ -228,7 +229,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 			                 delt*0.5*fac_src*pow(mom, -n_src));
 		}
 	} else if (type==2) { // derivative of solution plus part of sources
-		
+
 		// -> linear extrapolation at lower boundary
 		for(int ipos=-1; ipos>=-rim; --ipos) {
 			double fac = ((TheGrid.get_del(ipos) + TheGrid.get_del(ipos+1))/
@@ -243,7 +244,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 			                 (1.-n_dpdt-n_src)*5./6.*1.e6*pow(mom, n_dpdt-n_src)-
 			                 n_src*delt*0.5*fac_src*pow(mom, -n_src-1));
 		}
-		
+
 	} else { // derivative of solution
 
 		// -> linear extrapolation instead
@@ -290,7 +291,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 			              psi1*pow(xPos, 1.-powdotp-powS));
 
 		}
-		
+
 		for(int ipos=0; ipos<rim; ++ipos) {
 
 			double xPos = TheGrid.get_xCen(Nx+ipos);
@@ -307,7 +308,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 			              delt*0.5*s0*pow(xPos, -powS));
 			// cout << " Im Rand " << ipos << " " << spec(ipos) << endl;
 		}
-		
+
 		for(int ipos=0; ipos<rim; ++ipos) {
 
 			double xPos = TheGrid.get_xCen(Nx+ipos);
@@ -318,7 +319,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 		}
 	} else if(type==2) {
 		for(int ipos=-rim; ipos<0; ++ipos) {
-			
+
 			double xPos = TheGrid.get_xCen(ipos);
 			double derivSol = (-powdotp*hom_par*pow(xPos, -powdotp-1) +
 			                   (1.-powdotp-powS)*psi1*pow(xPos, -powdotp-powS));
@@ -326,7 +327,7 @@ void BoundaryHandler::do_BCsCellAve(NumMatrix<double,1> &spec,
 
 			spec(ipos) = derivSol + delt*0.5*derivSrc;
 		}
-		
+
 		// std::cout << " Type " << type << std::endl;
 		for(int ipos=0; ipos<rim; ++ipos) {
 
@@ -374,7 +375,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 	  Option keepBoundVals allows to leave all non-MPI boundaries
 	  constant
 	 */
-	
+
 	bool xL_isOuterBound(true);
 	bool xR_isOuterBound(true);
 	bool yL_isOuterBound(true);
@@ -417,7 +418,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 			if(bc_Type[0] == 0) { // Dirichlet-boundaries
 				// cout << " Look I am working " << endl;
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-rim; ipos<=0; ++ipos) {
 							dist(ipos,iy,iz) = 0.;
 						}
@@ -426,7 +427,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 			} else if(bc_Type[0] == 1) { // Neumann-boundaries
 				// cout << " Look I am screwing up " << endl;
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-1; ipos>=-rim; --ipos) {
 							dist(ipos,iy,iz) = 0.;
 							dist(ipos,iy,iz) = 2.*dist(ipos+1,iy,iz) -
@@ -442,7 +443,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 		if(xR_isOuterBound && !keepBoundVals) {
 			if(bc_Type[1] == 0) { // Dirichlet-boundaries
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[0]; ipos<=mx[0]+rim; ++ipos) {
 							dist(ipos,iy,iz) = 0.;
 						}
@@ -450,7 +451,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 				}
 			} else if(bc_Type[1] == 1) { // Dirichlet-boundaries
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[0]; ipos<=mx[0]+rim; ++ipos) {
 							dist(ipos,iy,iz) = 2.*dist(ipos-1,iy,iz) -
 								dist(ipos-2,iy,iz);
@@ -469,14 +470,14 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 // #endif
 
 // 	exit(3);
-	
+
 	if(do_yBound) {
 	  //	  cout << " Doing y " << keepBoundVals << " " << yL_isOuterBound << " " << bc_Type[2] << endl;
 		// lower y-boundary
 		if(yL_isOuterBound && !keepBoundVals) {
 			if(bc_Type[2] == 0) { // Dirichlet bcs:
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-rim; ipos<=0; ++ipos) {
 							dist(ix,ipos,iz) = 0.;
 						}
@@ -484,7 +485,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 				}
 			} else if(bc_Type[2] == 1) { // Neumann bcs:
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-1; ipos>=-rim; --ipos) {
 							dist(ix,ipos,iz) = 2.*dist(ix,ipos+1,iz) -
 								dist(ix,ipos+2,iz);
@@ -493,13 +494,13 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 				}
 			}
 		}
-		
+
 
 		// upper y-boundary
 		if(yR_isOuterBound && !keepBoundVals) {
 			if(bc_Type[3] == 0) { // Dirichlet bcs:
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[1]; ipos<=mx[1]+rim; ++ipos) {
 							dist(ix,ipos,iz) = 0.;
 						}
@@ -507,7 +508,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 				}
 			} else if(bc_Type[3] == 1) { // Neumann bcs:
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[1]; ipos<=mx[1]+rim; ++ipos) {
 							dist(ix,ipos,iz) = 2.*dist(ix,ipos-1,iz) -
 								dist(ix,ipos-2,iz);
@@ -519,7 +520,7 @@ void BoundaryHandler3D::do_BCs(NumMatrix<double,3> &dist, int rim, int dir,
 #ifdef parallel
 		do_bc_MPI(dist, mx, 1, rim);
 #endif
-	}		
+	}
 
 	if(do_zBound) {
 		// lower z-boundary
@@ -588,12 +589,12 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 	bool SendRight = !MyMPI.is_OuterBoundary(2*dir+1);
 	bool RecvRight = !MyMPI.is_OuterBoundary(2*dir+1);
 	bool RecvLeft  = !MyMPI.is_OuterBoundary(2*dir);
-	
+
 	bool extended = false;
 	if(rim>1) extended = true;
 
 
-	int ext_num(2*rim+1); // Number of additional cells 
+	int ext_num(2*rim+1); // Number of additional cells
 	int sizex = (mx[1]+ext_num)*(mx[2]+ext_num)*rim;
 	int sizey = (mx[0]+ext_num)*(mx[2]+ext_num)*rim;
 	int sizez = (mx[0]+ext_num)*(mx[1]+ext_num)*rim;
@@ -621,7 +622,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 
 				SendBuff3D.resize(Index::set(   1,      -rim,      -rim),
 				                  Index::set( rim, mx[1]+rim, mx[2]+rim));
-				
+
 				for(int iz = -1; iz <= mx[2]+1; iz++) {
 					for(int iy = -1; iy <= mx[1]+1; iy++) {
 						for(int ix = 1; ix<=rim; ix++) {
@@ -638,7 +639,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 
 				SendBuff2D.resize(Index::set(     -rim,      -rim),
 				                  Index::set(mx[0]+rim, mx[2]+rim));
-				
+
 				for(int iz = -1; iz <= mx[2]+1; iz++) {
 					for(int ix = -1; ix <= mx[0]+1; ix++) {
 						SendBuff2D(ix,iz) = data(ix,1,iz);
@@ -646,10 +647,10 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 				}
 
 			} else {
-				
+
 				SendBuff3D.resize(Index::set(     -rim,   1,      -rim),
 				                  Index::set(mx[0]+rim, rim, mx[2]+rim));
-				
+
 				for(int iz = -1; iz <= mx[2]+1; iz++) {
 					for(int iy = 1; iy<=rim; iy++) {
 						for(int ix = -1; ix <= mx[0]+1; ix++) {
@@ -663,10 +664,10 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 		} else { // z-direction
 
 			if(!extended) {
-				
+
 				SendBuff2D.resize(Index::set(     -rim,      -rim),
 				                  Index::set(mx[0]+rim, mx[1]+rim));
-				
+
 				for(int iy = -1; iy <= mx[1]+1; iy++) {
 					for(int ix = -1; ix <= mx[0]+1; ix++) {
 						SendBuff2D(ix,iy) = data(ix,iy,1);
@@ -677,7 +678,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 
 				SendBuff3D.resize(Index::set(     -rim,      -rim,   1),
 				                  Index::set(mx[0]+rim, mx[1]+rim, rim));
-				
+
 				for(int iz = 1; iz<=rim; iz++) {
 					for(int iy = -1; iy <= mx[1]+1; iy++) {
 						for(int ix = -1; ix <= mx[0]+1; ix++) {
@@ -690,7 +691,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 
 		}
 
-	} 
+	}
 
 	if(RecvRight) {
 		if(dir==0) { // x-direction
@@ -749,7 +750,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 			               SendLeft, RecvRight);
 		}
 	}
-	
+
 
 	// Now assign the data if necessary
 	if(RecvRight) {
@@ -809,7 +810,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 			}
 
 		}
-				
+
 	}
 
 
@@ -843,14 +844,14 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 						}
 					}
 				}
-				
+
 			}
 			into = MyMPI.get_right();
 
 		} else if (dir == 1) { // y-direction
 
 			if(!extended) {
-				
+
 				SendBuff2D.resize(Index::set(     -rim,      -rim),
 				                  Index::set(mx[0]+rim, mx[2]+rim));
 
@@ -879,7 +880,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 		} else { // z-direction
 
 			if(!extended) {
-				
+
 				SendBuff2D.resize(Index::set(     -rim,      -rim),
 				                  Index::set(mx[0]+rim, mx[1]+rim));
 
@@ -901,7 +902,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 						}
 					}
 				}
-				
+
 			}
 			into = MyMPI.get_top();
 
@@ -957,7 +958,7 @@ void BoundaryHandler3D::do_bc_MPI(NumMatrix<double,3> &data, NumArray<int> &mx,
 			from = MyMPI.get_bottom();
 
 		}
-		
+
 	}
 
 	// Do the actual communication
@@ -1151,7 +1152,7 @@ void BoundaryHandler2D::do_BCs(NumMatrix<double,2> &dist,
 				}
 			}
 		}
-	
+
 
 		// upper x-boundary
 		// if(bc_Type[1] == 1) { // Dirichlet-boundaries
@@ -1276,19 +1277,19 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 	bool SendRight = !MyMPI.is_OuterBoundary(2*dir2D+1);
 	bool RecvRight = !MyMPI.is_OuterBoundary(2*dir2D+1);
 	bool RecvLeft  = !MyMPI.is_OuterBoundary(2*dir2D);
-	
+
 	bool extended = false;
 	if(rim>1) extended = true;
 
-	
-	int ext_num(2*rim+1); // Number of additional cells 
+
+	int ext_num(2*rim+1); // Number of additional cells
 	int sizex = (mx[1]+ext_num)*rim;
 	int sizey = (mx[0]+ext_num)*rim;
 
 	int from(0), into(0); // Send & receive directions
 	int size(0);
 
-	
+
 	// Prepare sending of data (if necessary)
 	if(SendLeft) {
 
@@ -1313,7 +1314,7 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 
 				SendBuff2D.resize(Index::set(   1,      -rim),
 				                  Index::set( rim, mx[1]+rim));
-				
+
 				for(int iy = -1; iy <= mx[1]+1; iy++) {
 					for(int ix = 1; ix<=rim; ix++) {
 						SendBuff2D(ix,iy) = data(ix,iy);
@@ -1327,16 +1328,16 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 
 				SendBuff1D.resize(Index::set(     -rim),
 				                  Index::set(mx[0]+rim));
-				
+
 				for(int ix = -1; ix <= mx[0]+1; ix++) {
 					SendBuff1D(ix) = data(ix,1);
 				}
 
 			} else {
-				
+
 				SendBuff2D.resize(Index::set(     -rim,   1),
 				                  Index::set(mx[0]+rim, rim));
-				
+
 				for(int iy = 1; iy<=rim; iy++) {
 					for(int ix = -1; ix <= mx[0]+1; ix++) {
 						SendBuff2D(ix,iy) = data(ix,iy);
@@ -1346,10 +1347,10 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 
 		}
 
-	} 
+	}
 
 	if(RecvRight) {
-		
+
 		if(dir2D == 0) {
 			from = MyMPI.get_right();
 		} else {
@@ -1397,7 +1398,7 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 			               SendLeft, RecvRight);
 		}
 	}
-	
+
 
 	// Now assign the data if necessary
 	if(RecvRight) {
@@ -1431,7 +1432,7 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 			}
 
 		}
-				
+
 	}
 
 
@@ -1466,14 +1467,14 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 						SendBuff2D(ix,iy) = data(mx[0]-ix,iy);
 					}
 				}
-				
+
 			}
 			size = sizex;
 
 		} else { // 2-direction in 2D space
 
 			if(!extended) {
-				
+
 				SendBuff1D.resize(Index::set(     -rim),
 				                  Index::set(mx[0]+rim));
 
@@ -1485,7 +1486,7 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 
 				SendBuff2D.resize(Index::set(     -rim,   1),
 				                  Index::set(mx[0]+rim, rim));
-				
+
 				for(int iy = 1; iy<=rim; iy++) {
 					for(int ix = -1; ix <= mx[0]+1; ix++) {
 						SendBuff2D(ix,iy) = data(ix,mx[1]-iy);
@@ -1528,7 +1529,7 @@ void BoundaryHandler2D::do_bc_MPI(NumMatrix<double,2> &data, NumArray<int> &mx,
 			}
 
 		}
-		
+
 	}
 
 	// Do the actual communication
@@ -1600,32 +1601,32 @@ void BoundaryHandler3D::do_MpiSendRecv(NumMatrix<double,3> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm3d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm3d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 
@@ -1647,32 +1648,32 @@ void BoundaryHandler3D::do_MpiSendRecv(NumMatrix<double,2> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm3d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm3d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 
@@ -1694,32 +1695,32 @@ void BoundaryHandler2D::do_MpiSendRecv(NumMatrix<double,2> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm2d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm2d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 
@@ -1741,32 +1742,32 @@ void BoundaryHandler2D::do_MpiSendRecv(NumMatrix<double,1> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm2d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm2d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 
@@ -1782,7 +1783,7 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 	  Here momentum dimension is also taken into account - but this is
 	  done passively (no boundaries are done in that dimension)
 	 */
-	
+
 	bool xL_isOuterBound(true);
 	bool xR_isOuterBound(true);
 	bool yL_isOuterBound(true);
@@ -1827,7 +1828,7 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 		if(xL_isOuterBound && !keepBoundVals) {
 			for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-rim; ipos<=0; ++ipos) {
 							dist(ipos,iy,iz,ip) = 0.;
 						}
@@ -1841,7 +1842,7 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 		if(xR_isOuterBound && !keepBoundVals) {
 			for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 				for(int iy = -rim; iy <= mx[1]+rim; ++iy) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[0]; ipos<=mx[0]+rim; ++ipos) {
 							dist(ipos,iy,iz,ip) = 0.;
 						}
@@ -1859,14 +1860,14 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 // #endif
 
 // 	exit(3);
-	
+
 	if(do_yBound) {
 		// lower y-boundary
 		// if(bc_Type[2] == 1) { // Dirichlet bcs:
 		if(yL_isOuterBound && !keepBoundVals) {
 			for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=-rim; ipos<=0; ++ipos) {
 							dist(ix,ipos,iz,ip) = 0.;
 						}
@@ -1874,14 +1875,14 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 				}
 			}
 		}
-		
+
 
 		// upper y-boundary
 		// if(bc_Type[3] == 1) { // Dirichlet bcs:
 		if(yR_isOuterBound && !keepBoundVals) {
 			for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 				for(int ix = 0; ix <= mx[0]; ix++) {
-					for(int iz = -rim; iz <= mx[2]+rim; ++iz) { 
+					for(int iz = -rim; iz <= mx[2]+rim; ++iz) {
 						for(int ipos=mx[1]; ipos<=mx[1]+rim; ++ipos) {
 							dist(ix,ipos,iz,ip) = 0.;
 						}
@@ -1892,7 +1893,7 @@ void BoundaryHandler4D::do_BCs(NumMatrix<double,4> &dist, int rim, int dir,
 #ifdef parallel
 		do_bc_MPI(dist, mx, 1, rim, rimP);
 #endif
-	}		
+	}
 
 	if(do_zBound) {
 		// lower z-boundary
@@ -1947,12 +1948,12 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 	bool SendRight = !MyMPI.is_OuterBoundary(2*dir+1);
 	bool RecvRight = !MyMPI.is_OuterBoundary(2*dir+1);
 	bool RecvLeft  = !MyMPI.is_OuterBoundary(2*dir);
-	
+
 	bool extended = false;
 	if(rim>1) extended = true;
 
 
-	int ext_num(2*rim+1); // Number of additional cells 
+	int ext_num(2*rim+1); // Number of additional cells
 	int ext_numP(2*rimP+1); // same for momentum dimension
 	int sizex = (mx[3]+ext_numP)*(mx[1]+ext_num)*(mx[2]+ext_num)*rim;
 	int sizey = (mx[3]+ext_numP)*(mx[0]+ext_num)*(mx[2]+ext_num)*rim;
@@ -1985,7 +1986,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 				                                -rimP),
 				                  Index::set( rim, mx[1]+rim, mx[2]+rim,
 				                              mx[3]+rimP));
-				
+
 				for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 					for(int iz = -1; iz <= mx[2]+1; iz++) {
 						for(int iy = -1; iy <= mx[1]+1; iy++) {
@@ -2004,7 +2005,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 
 				SendBuff3D.resize(Index::set(     -rim,      -rim,      -rimP),
 				                  Index::set(mx[0]+rim, mx[2]+rim, mx[3]+rimP));
-				
+
 				for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 					for(int iz = -1; iz <= mx[2]+1; iz++) {
 						for(int ix = -1; ix <= mx[0]+1; ix++) {
@@ -2014,12 +2015,12 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 				}
 
 			} else {
-				
+
 				SendBuff4D.resize(Index::set(     -rim,   1,      -rim,
 				                                -rimP),
 				                  Index::set(mx[0]+rim, rim, mx[2]+rim,
 				                             mx[3]+rimP));
-				
+
 				for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 					for(int iz = -1; iz <= mx[2]+1; iz++) {
 						for(int iy = 1; iy<=rim; iy++) {
@@ -2035,10 +2036,10 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 		} else { // z-direction
 
 			if(!extended) {
-				
+
 				SendBuff3D.resize(Index::set(     -rim,      -rim,      -rimP),
 				                  Index::set(mx[0]+rim, mx[1]+rim, mx[3]+rimP));
-				
+
 				for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 					for(int iy = -1; iy <= mx[1]+1; iy++) {
 						for(int ix = -1; ix <= mx[0]+1; ix++) {
@@ -2053,7 +2054,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 				                                  -rimP),
 				                  Index::set(mx[0]+rim, mx[1]+rim, rim,
 				                             mx[3]+rimP));
-				
+
 				for(int ip = -rimP; ip <= mx[3]+rimP; ++ip) {
 					for(int iz = 1; iz<=rim; iz++) {
 						for(int iy = -1; iy <= mx[1]+1; iy++) {
@@ -2068,7 +2069,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 
 		}
 
-	} 
+	}
 
 	if(RecvRight) {
 		if(dir==0) { // x-direction
@@ -2133,7 +2134,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 			               SendLeft, RecvRight);
 		}
 	}
-	
+
 
 	// Now assign the data if necessary
 	if(RecvRight) {
@@ -2205,7 +2206,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 			}
 
 		}
-				
+
 	}
 
 
@@ -2245,14 +2246,14 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 						}
 					}
 				}
-				
+
 			}
 			into = MyMPI.get_right();
 
 		} else if (dir == 1) { // y-direction
 
 			if(!extended) {
-				
+
 				SendBuff3D.resize(Index::set(     -rim,      -rim,      -rimP),
 				                  Index::set(mx[0]+rim, mx[2]+rim, mx[3]+rimP));
 
@@ -2287,7 +2288,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 		} else { // z-direction
 
 			if(!extended) {
-				
+
 				SendBuff3D.resize(Index::set(     -rim,      -rim,      -rimP),
 				                  Index::set(mx[0]+rim, mx[1]+rim, mx[3]+rimP));
 
@@ -2315,7 +2316,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 						}
 					}
 				}
-				
+
 			}
 			into = MyMPI.get_top();
 
@@ -2377,7 +2378,7 @@ void BoundaryHandler4D::do_bc_MPI(NumMatrix<double,4> &data, NumArray<int> &mx,
 			from = MyMPI.get_bottom();
 
 		}
-		
+
 	}
 
 	// Do the actual communication
@@ -2494,32 +2495,32 @@ void BoundaryHandler4D::do_MpiSendRecv(NumMatrix<double,4> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm3d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm3d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 
@@ -2541,32 +2542,32 @@ void BoundaryHandler4D::do_MpiSendRecv(NumMatrix<double,3> &Send,
 	for(int ireq=0; ireq<numRequests; ireq++) {
 		requests[ireq] = MPI_REQUEST_NULL;
 	}
-    
+
 	// receive data
 	// message tag -- must not be less than 0!
 	int ireq(0);
 	if(do_Receive) {
-		int tag = from; 
+		int tag = from;
 
 		MPI_Irecv((double *)Recv, size, MPI_DOUBLE, from , tag,
 		          MyMPI.comm3d, &requests[ireq]);
 		ireq++;
 	}
-	
+
 	if(do_Send) {
 		int tag = MyMPI.get_rank();
-    
+
 		MPI_Isend((double *)Send, size, MPI_DOUBLE, into, tag,
 		          MyMPI.comm3d, &requests[ireq]);
 	}
 
 
 	/* wait for all communication to complete */
-	
+
 	if(numRequests > 0) {
 		MPI_Waitall(numRequests, requests, statusrl);
 	}
-    
+
 }
 
 

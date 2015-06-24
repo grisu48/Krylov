@@ -35,6 +35,7 @@ static inline double matrix_func(int ix, int iy, int iz) {
 	return (abs(ix)%5)*random_double()+(abs(iy)%5)*random_double()+(abs(iz)%5)*random_double();
 }
 
+#if 0
 static void diagonalizeMatrix(Matrix3d &matrix) {
 	ssize_t size[3] = { (ssize_t)matrix.size(0), (ssize_t)matrix.size(1), (ssize_t)matrix.size(2) };
 		const ssize_t rim = matrix.rim();
@@ -47,7 +48,7 @@ static void diagonalizeMatrix(Matrix3d &matrix) {
 			}
 	}
 }
-
+#endif
 
 static void randomizeMatrix(Matrix3d &matrix) {
 	ssize_t size[3] = { (ssize_t)matrix.size(0), (ssize_t)matrix.size(1), (ssize_t)matrix.size(2) };
@@ -63,6 +64,7 @@ static void randomizeMatrix(Matrix3d &matrix) {
 
 int main(int argc, char** argv) {
 	cout << "Matrix multiplication test program" << endl;
+	long runtime = -time_ms();
 
 	Matrix3d matrix(size, size, size, rim);
 	Matrix3d matrix2(size, size, size, rim);
@@ -116,5 +118,7 @@ int main(int argc, char** argv) {
 	}
 
 	if(context != NULL) delete context;
+	runtime +=time_ms();
+	cout << "\rRuntime: " << runtime << " ms" << endl;
 	cout << "Bye" << endl;;
 }
