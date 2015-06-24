@@ -249,11 +249,11 @@ int main(int argc, char** argv) {
 					case TEST_THREE:	// Test 3 (räumliche Diffusion mit D_xy)
 					{
 						double AVal = 0.1;//1.8;
-						diffTens[0](ix,iy,iz) = diffTensFactor[1] * yVal;
-						diffTens[1](ix,iy,iz) = diffTensFactor[2] * xVal;
-						diffTens[2](ix,iy,iz) = diffTensFactor[3] * zVal;
+						diffTens[0](ix,iy,iz) = diffTensFactor[0] * yVal;
+						diffTens[1](ix,iy,iz) = diffTensFactor[1] * xVal;
+						diffTens[2](ix,iy,iz) = diffTensFactor[2] * zVal;
 						// DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
-						diffTens[3](ix,iy,iz) = diffTensFactor[4] * AVal*sqr(xVal)*yVal*zVal;
+						diffTens[3](ix,iy,iz) = diffTensFactor[3] * AVal*sqr(xVal)*yVal*zVal;
 						const double D_xy = diffTens[3](ix,iy,iz);
 						rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) +
 								pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal) +
