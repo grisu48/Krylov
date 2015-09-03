@@ -62,7 +62,7 @@ static void randomizeMatrix(Matrix3d &matrix) {
 	}
 }
 
-int main(int argc, char** argv) {
+int main() {
 	cout << "Matrix multiplication test program" << endl;
 	long runtime = -time_ms();
 

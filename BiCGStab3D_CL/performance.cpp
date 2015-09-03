@@ -70,7 +70,8 @@ static void printHelp(string progname = "matrix_cl") {
 	cout << "         --gpu            Use GPU device context" << endl;
 	cout << "         --cpu            Use CPU device context" << endl;
 	cout << "         --local N        Set local memory to N bytes" << endl;
-	cout << "       | --rim N          Set number of RIM cells" << endl;
+	cout << "         --rim N          Set number of RIM cells" << endl;
+	cout << "  -i N | --iterations N   Set the number of iterations" << endl;
 	cout << "  -v   | --verbose        Verbose output" << endl;
 	cout << endl;
 }
@@ -142,6 +143,9 @@ int main(int argc, char** argv) {
 				rim = (size_t)atol(argv[++i]);
 			} else if(arg == "--verbose" || arg == "-v") {
 				verbose = true;
+			} else if(arg == "--iterations" || arg == "-i") {
+				if(isLast) throw "Missing argument: iterations";
+				iterations = atol(argv[++i]);
 			} else
 				throw string("Illegal argument: " + string(arg)).c_str();
 		}

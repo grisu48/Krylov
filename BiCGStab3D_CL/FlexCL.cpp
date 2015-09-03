@@ -1,11 +1,11 @@
 
 /* =============================================================================
- * 
+ *
  * Title:         FlexCL
  * Author:        Felix Niederwanger
  * Description:   OpenCL wrapper library providing object-oriented access to
  *                OpenCL
- * 
+ *
  * =============================================================================
  */
 
@@ -14,8 +14,8 @@
 #include <sstream>
 #include <fstream>
 #include <streambuf>
-#include <algorithm> 
-#include <functional> 
+#include <algorithm>
+#include <functional>
 #include <cctype>
 #include <locale>
 
@@ -99,22 +99,22 @@ static inline unsigned long _flexcl_profile_info(cl_event &perf_event, cl_profil
 /* ==== Here the OpenCL part starts ================================= */
 
 OpenCL::OpenCL() {
-	
+
 	try {
 		ret_num_devices = 0;
 		ret = clGetPlatformIDs(0, NULL, &ret_num_platforms);
 		// ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
 		checkReturn(ret, "Error getting platform count");
-		
+
 		// Get all platform ID's
 		platform_ids = new cl_platform_id[(int)ret_num_platforms];
 		ret = clGetPlatformIDs(ret_num_platforms, platform_ids, NULL);
-		
+
 		//ret = clGetDeviceIDs( platform_id, CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &ret_num_devices);
 		checkReturn(ret, "Getting devices failed");
-		
+
 	} catch (...) {
-		// Cleanup 
+		// Cleanup
 		throw;
 	}
 }
@@ -152,12 +152,12 @@ void OpenCL::close() {
 
 vector<PlatformInfo> OpenCL::get_platforms(void) {
 	vector<PlatformInfo> result;
-	
+
 	const int len = (int)ret_num_platforms;
 	for(int i=0;i<len;i++) {
 		result.push_back(PlatformInfo(platform_ids[i]));
 	}
-	
+
 	return result;
 }
 
@@ -185,7 +185,7 @@ Context* OpenCL::createContext(cl_platform_id platform_id, cl_device_id device_i
 		default: throw DeviceException("Unknwon error while creating context");
 	}
 	// Ok - The OpenCL context is created sucessfully.
-	
+
 	Context *context_Obj = new Context(this, context, device_id, platform_id);
 	contexts.push_back(context_Obj);
 	return context_Obj;
@@ -198,15 +198,15 @@ Context* OpenCL::createContext(cl_platform_id p_id) {
 	cl_device_id device_id = NULL;
 	cl_platform_id platform_id = NULL;
 	cl_uint num_devices;
-	
-	
+
+
 	ret = clGetDeviceIDs( p_id, CL_DEVICE_TYPE_ALL, 1, &device_id, &num_devices);
 	checkReturn(ret, "Querying devices failed");
 	if(num_devices > 0) {
 		platform_id = p_id;
 	} else
 		throw DeviceException("Device type not found");
-	
+
 	cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 	switch(ret) {
 		case CL_SUCCESS: break;
@@ -219,7 +219,7 @@ Context* OpenCL::createContext(cl_platform_id p_id) {
 		default: throw DeviceException("Unknwon error while creating context");
 	}
 	// Ok - The OpenCL context is created sucessfully.
-	
+
 	Context *context_Obj = new Context(this, context, device_id, platform_id);
 	contexts.push_back(context_Obj);
 	return context_Obj;
@@ -232,7 +232,7 @@ Context* OpenCL::createContext(cl_device_type device_type) {
 	cl_device_id device_id = NULL;
 	cl_platform_id platform_id = NULL;
 	cl_uint num_devices;
-	
+
 	for(cl_uint id = 0; id<ret_num_platforms;id++) {
 		cl_device_id dev_id;
 		ret = clGetDeviceIDs( platform_ids[id], device_type, 1, &dev_id, &num_devices);
@@ -243,10 +243,10 @@ Context* OpenCL::createContext(cl_device_type device_type) {
 			device_id = dev_id;
 			break;
 		}
-	} 
-	
+	}
+
 	if(device_id == NULL || platform_id == NULL) throw DeviceException("Device type not found");
-	
+
 	/*cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (int)platform_id, 0};
 	cl_context context = clCreateContextFromType(properties, CL_DEVICE_TYPE_GPU, NULL, NULL, &ret);
 	*/
@@ -262,11 +262,11 @@ Context* OpenCL::createContext(cl_device_type device_type) {
 		default: throw DeviceException("Unknwon error while creating context");
 	}
 	// Ok - The OpenCL context is created sucessfully.
-	
+
 	Context *context_Obj = new Context(this, context, device_id, platform_id);
 	contexts.push_back(context_Obj);
 	return context_Obj;
-	
+
 }
 
 Context* OpenCL::createCPUContext(void) {
@@ -280,7 +280,7 @@ Context* OpenCL::createOpenGLContext(bool initOpenGl) {
 		int argc = 0;
 		glutInit(&argc, NULL);
 		glutCreateWindow("");
-		
+
 		GLenum res = glewInit();
 		if (res != GLEW_OK)
 		{
@@ -290,7 +290,7 @@ Context* OpenCL::createOpenGLContext(bool initOpenGl) {
 			throw OpenCLException(error);
 		}
     }
-    
+
     /* ==== Setting up OpenCL and query OpenGL shared devices==== */
 	const int max_devices = 1024;
 	cl_int state;
@@ -323,25 +323,25 @@ Context* OpenCL::createOpenGLContext(bool initOpenGl) {
 	if(state != CL_SUCCESS) {
 		throw OpenCLException("Device resolution failed (clGetGLContextInfoKHR)", state);
 	}
-	
+
 	const int numberSharedDevices = (int)(size/sizeof(cl_device_id));
 	if(numberSharedDevices <= 0) {
 		throw OpenCLException("No shared OpenCL/OpenGL devices found (number of shared devices = 0)", state);
 	}
-	
+
 	context = clCreateContext(properties, 1, &devices[0], NULL, NULL, &state);
 	if(state != CL_SUCCESS) {
 		throw OpenCLException("Context creation failed", state);
 	}
-		
-	
+
+
 	// Create profiling command queue
 	cl_command_queue_properties queue_props = CL_QUEUE_PROFILING_ENABLE;
 	queue = clCreateCommandQueue(context, devices[0], queue_props, &state);
 	if(state != CL_SUCCESS) {
 		throw OpenCLException("Command queue creation failed", state);
 	}
-	
+
 	Context *context_Obj = new Context(this, context, devices[0], platform[0]);
 	context_Obj->context = context;
 	context_Obj->command_queue = queue;
@@ -377,7 +377,7 @@ Context::Context(OpenCL *owner, cl_context context, cl_device_id device_id, cl_p
 	this->context = context;
 	this->_device_id = device_id;
 	this->_platform_id = platform_id;
-	
+
 	createCommandQueue();
 }
 
@@ -485,7 +485,7 @@ void Context::close() {
 		delete *it;
 	programs.clear();
 	*/
-	
+
 	// Clear shared OpenGL/OpenCL buffers
 #if _FLEXCL_OPENGL_SUPPORT_ == 1
 	/*for(vector<OpenGLBuffer*>::iterator it = openglBuffers.begin(); it != openglBuffers.end(); ++it) {
@@ -497,7 +497,7 @@ void Context::close() {
 	while(openglBuffers.size() > 0)
 		this->releaseBuffer(openglBuffers.at(0));
 #endif
-	
+
 	/*
 	for(vector<cl_mem>::iterator it = buffers.begin(); it != buffers.end(); ++it)
 		clReleaseMemObject(*it);
@@ -505,7 +505,7 @@ void Context::close() {
 	*/
 	while(this->buffers.size() > 0)
 		this->releaseBuffer(this->buffers.at(0));
-	
+
 	deleteCommandQueue();
 	if (context != NULL) clReleaseContext(context);
 	context = NULL;
@@ -531,7 +531,7 @@ cl_command_queue Context::createCommandQueue(bool outOfOrder, bool profiling) {
 	cout << ")" << endl;
 #endif
 	cl_int ret;
-	
+
 	cl_command_queue_properties properties(0);
 	if(outOfOrder) properties |= CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE;
 	if(profiling)  properties |= CL_QUEUE_PROFILING_ENABLE;
@@ -552,7 +552,7 @@ cl_mem Context::createBuffer(size_t size, void* host_ptr) {
 #endif
 	cl_mem buffer;
 	cl_int ret;
-	
+
 	if(host_ptr == NULL)
 		buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, size, NULL, &ret);
 	else
@@ -571,7 +571,7 @@ cl_mem Context::createReadBuffer(size_t size, void* host_ptr) {
 #endif
 	cl_mem buffer;
 	cl_int ret;
-	
+
 	if(host_ptr == NULL)
 		buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, size, NULL, &ret);
 	else
@@ -589,11 +589,11 @@ cl_mem Context::createWriteBuffer(size_t size, void* host_ptr) {
 #endif
 	cl_mem buffer;
 	cl_int ret;
-	
+
 	buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, size, host_ptr, &ret);
 	checkReturn(ret, "Creating queue failed");
 	return buffer;
-	
+
 }
 
 void Context::writeBuffer(cl_mem buffer, size_t size, void* ptr, bool blockingWrite, size_t offset) {
@@ -603,7 +603,7 @@ void Context::writeBuffer(cl_mem buffer, size_t size, void* ptr, bool blockingWr
 	cout << ")" << endl;
 #endif
 	cl_int ret;
-	
+
 	ret = clEnqueueWriteBuffer(this->command_queue, buffer, (blockingWrite?CL_TRUE:CL_FALSE), offset, size, ptr, 0, NULL, NULL);
 	checkReturn(ret, "Enqueue write buffer failed");
 }
@@ -614,18 +614,18 @@ unsigned long Context::writeBufferProfiling(cl_mem buffer, size_t size, void* pt
 #endif
 	cl_int ret;
 	cl_event perf_event;
-	
+
 	ret = clEnqueueWriteBuffer(this->command_queue, buffer, CL_TRUE, offset, size, ptr, 0, NULL, &perf_event);
 	checkReturn(ret, "Enqueue write buffer failed");
 	clWaitForEvents(1, &perf_event);
-	
+
 	cl_ulong start = 0, end = 0;
-	
+
 	start = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_START);
 	end = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_END);
 	// clGetEventProfilingInfo(perf_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	// clGetEventProfilingInfo(perf_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-	
+
 	return (unsigned long)(end-start);
 }
 
@@ -634,7 +634,7 @@ std::string Context::get_compile_output(cl_program program) {
 	size_t logSize;
 	// Get build status
 	clGetProgramBuildInfo(program, _device_id, CL_PROGRAM_BUILD_STATUS,sizeof(cl_build_status), &status, NULL);
-	
+
 	// Build log
 	clGetProgramBuildInfo(program, _device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 	char* log = new char[logSize+1];
@@ -643,13 +643,13 @@ std::string Context::get_compile_output(cl_program program) {
 		clGetProgramBuildInfo(program, _device_id, CL_PROGRAM_BUILD_LOG, logSize+1, log, NULL);
 
 		result_log = std::string(log);
-	
+
 		delete[] log;
 	} catch (...) {
 		delete[] log;
 		throw;
 	}
-	
+
 	return result_log;
 }
 
@@ -679,7 +679,7 @@ Program* Context::createProgramFromBinary(const unsigned char *source, size_t le
 		clReleaseProgram(program);
 		throw CompileException("Building OpenCL program failed", &_device_id, compile_output, ret);
 	}
-	
+
 	Program* program_Obj = new Program(this, program);
 	this->programs.push_back(program_Obj);
 	return program_Obj;
@@ -692,14 +692,14 @@ Program* Context::createProgramFromBinaryFile(const char *filename) {
 	try {
 		contents = string((istreambuf_iterator<char>(in_file)), istreambuf_iterator<char>());
 		in_file.close();
-		
+
 	} catch (...) {
 		in_file.close();
 		throw;
 	}
-	
+
 	return this->createProgramFromBinaryFile(contents);
-	
+
 }
 
 Program* Context::createProgramFromBinaryFile(std::string filename) {
@@ -724,7 +724,7 @@ Program* Context::createProgramFromSource(const char *kernel_source, size_t leng
 		clReleaseProgram(program);
 		throw CompileException("Building OpenCL program failed", &_device_id, compile_output, ret);
 	}
-	
+
 	Program* program_Obj = new Program(this, program);
 	this->programs.push_back(program_Obj);
 	return program_Obj;
@@ -735,7 +735,7 @@ Program* Context::createProgramFromSource(const char *kernel_source, size_t leng
  * */
 static string _flexCL_readSourceFile(const char* filename) {
 	stringstream buffer;
-	
+
 	ifstream in_file;
 	in_file.open(filename);
 	if(!in_file.is_open()) {
@@ -759,7 +759,7 @@ static string _flexCL_readSourceFile(const char* filename) {
 			if(line.substr(0,include_header.length()) == include_header) {
 				string include_filename = line.substr(include_header.length());
 				include_filename = _flexCL_trim(include_filename);
-				
+
 				// check filename syntax
 				bool localInclude;
 				if(include_filename.at(0) == '<' && include_filename.at(include_filename.length()-1) == '>') {
@@ -770,15 +770,15 @@ static string _flexCL_readSourceFile(const char* filename) {
 					string errmsg = string(filename) + " - line " + ::to_string(line_no) + ": #include statement has wrong syntax";
 					throw IOException(errmsg);
 				}
-				
+
 				include_filename = include_filename.substr(1, include_filename.length()-2);
 				include_filename = _flexCL_trim(include_filename);
-				
+
 				// Search for file, if not a local include
 				if(!localInclude) {
 					// TODO: This function will be implemented in a future release
 				}
-				
+
 				// #include the given file
 				buffer << _flexCL_readSourceFile(include_filename.c_str());
 			} else {
@@ -787,12 +787,12 @@ static string _flexCL_readSourceFile(const char* filename) {
 			}
 		}
 		in_file.close();
-		
+
 	} catch (...) {
 		in_file.close();
 		throw;
 	}
-	
+
 	return buffer.str();
 }
 
@@ -809,12 +809,12 @@ Program* Context::createProgramFromSourceFile(const char *filename)  {
 	try {
 		contents = string((istreambuf_iterator<char>(in_file)), istreambuf_iterator<char>());
 		in_file.close();
-		
+
 	} catch (...) {
 		in_file.close();
 		throw;
 	} */
-	
+
 	string contents = _flexCL_readSourceFile(filename);
 	return this->createProgramFromSource(contents);
 }
@@ -832,7 +832,7 @@ void Context::readBuffer(cl_mem buffer, size_t size, void *dst_ptr, bool blockin
 #endif
 	cl_int ret;
 	cl_bool blocking_read = (blockingRead?CL_TRUE:CL_FALSE);
-	
+
 	ret = clEnqueueReadBuffer(command_queue, buffer, blocking_read, offset, size, dst_ptr, 0, NULL, NULL);
 #if _FLEXCL_DEBUG_SWITCH_ == 1
 	if(ret == CL_SUCCESS)
@@ -850,7 +850,7 @@ unsigned long Context::readBufferProfiling(cl_mem buffer, size_t size, void *dst
 #endif
 	cl_int ret;
 	cl_event perf_event;
-	
+
 	ret = clEnqueueReadBuffer(command_queue, buffer, CL_TRUE, offset, size, dst_ptr, 0, NULL, &perf_event);
 #if _FLEXCL_DEBUG_SWITCH_ == 1
 	if(ret == CL_SUCCESS)
@@ -860,11 +860,11 @@ unsigned long Context::readBufferProfiling(cl_mem buffer, size_t size, void *dst
 #endif
 	checkReturn(ret, "Reading buffer failed");
 	clWaitForEvents(1, &perf_event);
-	
+
 	cl_ulong start = 0, end = 0;
 	start = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_START);
 	end = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_END);
-	
+
 	return (unsigned long)(end-start);
 }
 
@@ -928,7 +928,7 @@ void Program::cleanup() {
 		context->releaseBuffer(mem);
 	}
 	program_buffers.clear();
-	
+
 	if (program != NULL) clReleaseProgram(program);
 	program = NULL;
 }
@@ -945,10 +945,10 @@ Kernel* Program::createKernel(const char* func_name) {
 	cout << "OpenCL::Program::createKernel(\"" << func_name << "\")" << endl;
 #endif
 	cl_int ret;
-	
+
 	cl_kernel kernel = clCreateKernel(program, func_name, &ret);
 	checkReturn(ret, "Creating kernel failed");
-	
+
 	Kernel *kernel_obj = new Kernel(this, kernel);
 	kernels.push_back(kernel_obj);
 	return kernel_obj;
@@ -1008,7 +1008,7 @@ void Kernel::addArgument(size_t size, const void* arg_ptr) {
 	cout << "OpenCL::Kernel::addArgument(" << (arg_index+1) << ")" << endl;
 #endif
 	cl_int ret;
-	
+
 	ret = clSetKernelArg(kernel, arg_index++, size, arg_ptr);
 	checkReturn(ret, "Failed setting kernel argument " + ::to_string(arg_index));
 }
@@ -1018,7 +1018,7 @@ void Kernel::setArgument(unsigned int index, size_t size, const void* arg_ptr) {
 	cout << "OpenCL::Kernel::setArgument(" << (index) << "," << size << " Bytes)" << endl;
 #endif
 	cl_int ret;
-	
+
 	ret = clSetKernelArg(kernel, index, size, arg_ptr);
 	if( (unsigned int)(index) >= arg_index) arg_index = (cl_uint)(index+1);
 	checkReturn(ret, "Failed setting kernel argument " + ::to_string(arg_index));
@@ -1044,7 +1044,7 @@ void Kernel::setArgumentLocalMem(unsigned int index, size_t size) {
 	cout << "OpenCL::Kernel::setArgument(" << (index) << "" << size << " Bytes,LOCAL)" << endl;
 #endif
 	cl_int ret;
-	
+
 	ret = clSetKernelArg(kernel, index, size, NULL);
 	if( (unsigned int)(index) >= arg_index) arg_index = (cl_uint)(index+1);
 	checkReturn(ret, "Failed setting kernel argument " + ::to_string(arg_index));
@@ -1055,7 +1055,7 @@ void Kernel::addArgumentLocalMem(size_t size) {
 	cout << "OpenCL::Kernel::setArgument(" << (arg_index+1) << "," << size << " Bytes,LOCAL)" << endl;
 #endif
 	cl_int ret;
-	
+
 	ret = clSetKernelArg(kernel, arg_index++, size, NULL);
 	checkReturn(ret, "Failed setting kernel argument " + ::to_string(arg_index));
 }
@@ -1114,14 +1114,14 @@ void Kernel::enqueue() {
 	cout << "OpenCL::Kernel::enqueue()" << endl;
 #endif
 	cl_int ret;
-	
+
 	profile_infos_collected = false;
-	if(isProfiling()) 
+	if(isProfiling())
 		ret = clEnqueueTask(this->command_queue(), this->kernel, 0, NULL, &perf_event);
 	else
 		ret = clEnqueueTask(this->command_queue(), this->kernel, 0, NULL, NULL);
 	checkReturn(ret, "Enqueue kernel failed");
-	
+
 }
 
 void Kernel::enqueueNDRange(unsigned int work_dim, const size_t *global_work_size) {
@@ -1130,7 +1130,7 @@ void Kernel::enqueueNDRange(unsigned int work_dim, const size_t *global_work_siz
 
 void Kernel::enqueueNDRange(unsigned int work_dim, const size_t *global_work_size, const size_t *local_work_size) {
 	const bool profiling = isProfiling();
-	
+
 #if _FLEXCL_DEBUG_SWITCH_ == 1
 	cout << "OpenCL::Kernel::enqueueNDRange(DIMS=" << work_dim << ",{";
 	bool first = true;
@@ -1156,9 +1156,9 @@ void Kernel::enqueueNDRange(unsigned int work_dim, const size_t *global_work_siz
 	cout << "})" << endl;
 #endif
 	cl_int ret;
-	
+
 	profile_infos_collected = false;
-	if(profiling) 
+	if(profiling)
 		ret = clEnqueueNDRangeKernel(this->command_queue(), kernel, (cl_uint)(work_dim), NULL, global_work_size, local_work_size, 0, NULL, &perf_event);
 	else
 		ret = clEnqueueNDRangeKernel(this->command_queue(), kernel, (cl_uint)(work_dim), NULL, global_work_size, local_work_size, 0, NULL, NULL);
@@ -1188,12 +1188,12 @@ void Kernel::enqueueNDRange(size_t dim1, size_t dim2, size_t dim3) {
 void Kernel::collect_profile_infos(void) {
 	if(!isProfiling()) return;
 	clWaitForEvents(1, &perf_event);
-	
+
 	profiling_times[0] = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_QUEUED);
 	profiling_times[1] = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_SUBMIT);
 	profiling_times[2] = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_START);
 	profiling_times[3] = _flexcl_profile_info(perf_event, CL_PROFILING_COMMAND_END);
-	
+
 	profile_infos_collected = true;
 }
 
@@ -1248,10 +1248,10 @@ size_t Kernel::getPreferredWorkGroupSizeMultiple(void) {
 
 static inline string flexCL_platform_info(cl_platform_id id, cl_platform_info param_name) {
 	const int BUF_SIZE = 1024 * 10;
-	
+
 	cl_int ret;
 	char buffer[BUF_SIZE];
-	
+
 	ret = clGetPlatformInfo(id, param_name, BUF_SIZE, buffer, NULL);
 	checkReturn(ret, "Error getting platform info");
 	return string(buffer);
@@ -1279,20 +1279,20 @@ string PlatformInfo::extensions() { return this->_extensions; }
 vector<DeviceInfo> PlatformInfo::devices() {
 	vector<DeviceInfo> result;
 	cl_int ret;
-	
+
 	cl_device_id* devices = NULL;
 	cl_uint num_devices;
-	
+
 	ret  = clGetDeviceIDs( this->_platform_id, CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
 	devices = (cl_device_id*) malloc(sizeof(cl_device_id) * num_devices);
 	try {
 		ret |= clGetDeviceIDs( this->_platform_id, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
 		checkReturn(ret, "Querying device failed");
-		
+
 		for(cl_uint i=0;i<num_devices;i++) {
 			result.push_back( DeviceInfo(devices[i]) );
 		}
-		
+
 	} catch (...) {
 		free(devices);
 		throw;
@@ -1309,10 +1309,10 @@ vector<DeviceInfo> PlatformInfo::devices() {
 
 static string flexCL_device_info(cl_device_id id, cl_platform_info param_name) {
 	const int BUF_SIZE = 1024 * 10;		// For sure enough memory
-	
+
 	cl_int ret;
 	char buffer[BUF_SIZE];
-	
+
 	ret = clGetDeviceInfo(id, param_name, BUF_SIZE, buffer, NULL);
 	checkReturn(ret, "Error getting device info");
 	return string(buffer);
@@ -1325,7 +1325,7 @@ static string flexCL_device_info(cl_device_id id, cl_platform_info param_name) {
 DeviceInfo::DeviceInfo(cl_device_id device_id) {
 	cl_int ret;
 	this->_device_id = device_id;
-	
+
 	// CL_DEVICE_TYPE_CPU, CL_DEVICE_TYPE_GPU, CL_DEVICE_TYPE_ACCELERATOR, or CL_DEVICE_TYPE_DEFAULT.
 	cl_device_type device_type;
 	ret = clGetDeviceInfo(device_id, CL_DEVICE_TYPE, sizeof(cl_device_type), &device_type, NULL);
@@ -1341,10 +1341,10 @@ cl_device_id DeviceInfo::device_id() { return this->_device_id; }
 
 string DeviceInfo::getDeviceInfo(cl_device_info param_name) {
 	const int BUF_SIZE = 1024 * 10;		// For sure enough memory
-	
+
 	cl_int ret;
 	char buffer[BUF_SIZE];
-	
+
 	ret = clGetDeviceInfo(this->_device_id, param_name, BUF_SIZE, buffer, NULL);
 	buffer[BUF_SIZE-1] = '\0';
 	checkReturn(ret, "Error getting device info");
@@ -1387,7 +1387,7 @@ size_t DeviceInfo::getDeviceInfo_size_t(cl_device_info param_name) {
 	checkReturn(ret, "Error getting device info");
 	return result;
 }
-	
+
 unsigned long DeviceInfo::maxMemAllocSize() { return (unsigned long)this->getDeviceInfo_ul(CL_DEVICE_MAX_MEM_ALLOC_SIZE); }
 unsigned int DeviceInfo::maxComputeUnits() { return (unsigned int)this->getDeviceInfo_ui(CL_DEVICE_MAX_COMPUTE_UNITS); }
 string DeviceInfo::deviceVersion() { return flexCL_device_info(this->_device_id, CL_DEVICE_VERSION); }
@@ -1413,9 +1413,9 @@ unsigned long DeviceInfo::timerResolution() {
 	size_t timer_resolution;
 	ret = clGetDeviceInfo(this->_device_id, CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(size_t), &timer_resolution, NULL);
 	checkReturn(ret, "Error getting device info (Timer resolution)");
-	
-	if(timer_resolution < 0L) return 0L;
-	else return (unsigned long)timer_resolution;
+
+	// if(timer_resolution < 0L) return 0L;
+	return (unsigned long)timer_resolution;
 }
 
 bool DeviceInfo::hasImageSupport(void) { return this->getDeviceInfo_i(CL_DEVICE_IMAGE_SUPPORT) > 0; }
@@ -1453,7 +1453,7 @@ OpenGLBuffer::~OpenGLBuffer() {
 
 void OpenGLBuffer::close(void) {
 	if(_closed) return;
-	
+
 	// Release the object
 	if(_aquired) this->release();
 	if(_created) {
@@ -1493,7 +1493,7 @@ void OpenGLBuffer::aquire(void) {
 void OpenGLBuffer::release(void) {
 	cl_int ret;
 	ret = clEnqueueReleaseGLObjects(this->_context->command_queue, 1, &this->_mem, 0, NULL, NULL);
-	checkReturn(ret, "Error releasing OpenGL buffer"); 
+	checkReturn(ret, "Error releasing OpenGL buffer");
 	_aquired = false;
 }
 
@@ -1512,7 +1512,7 @@ OpenGLBuffer* Context::createGLBuffer(size_t size, const GLvoid* data, bool isSt
 		usage = GL_STATIC_DRAW;
 	else
 		usage = GL_DYNAMIC_DRAW;
-	
+
 	glGenBuffers(1, &buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, buffer);
 	glBufferData(GL_ARRAY_BUFFER, size, data, usage);
@@ -1532,7 +1532,7 @@ void OpenGLBuffer::readBuffer(size_t size, void* data, bool blocking) {
 	if(_closed) throw OpenCLException("Buffer is closed");
 	if(!_aquired) this->aquire();
 	this->_context->readBuffer(this->_mem, size, data, blocking);
-	
+
 }
 
 void OpenGLBuffer::writeBuffer(size_t size, void* data, bool blocking) {

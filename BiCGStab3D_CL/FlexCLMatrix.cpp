@@ -448,7 +448,7 @@ void Matrix3d::printDifferences(Matrix3d* matrix, std::ostream &out, bool includ
 				for(ssize_t iz=-_rim;iz<size[0];iz++) {
 					const int index = this->index(ix,iy,iz);
 					if(!fequals(this->data[index], matrix->data[index])) {
-						cout << "matrix[" << setw(4) << ix << " " << setw(4) << iy << " " << setw(4) << iz << "] (" << this->data[index] << " != " << matrix->data[index] << ")" << endl;
+						out << "matrix[" << setw(4) << ix << " " << setw(4) << iy << " " << setw(4) << iz << "] (" << this->data[index] << " != " << matrix->data[index] << ")" << endl;
 					}
 				}
 	} else {
@@ -457,7 +457,7 @@ void Matrix3d::printDifferences(Matrix3d* matrix, std::ostream &out, bool includ
 				for(size_t iz=0;iz<_mx[2];iz++) {
 					const int index = this->index(ix,iy,iz);
 					if(!fequals(this->data[index], matrix->data[index])) {
-						cout << "matrix[" << setw(4) << ix << " " << setw(4) << iy << " " << setw(4) << iz << "] (" << this->data[index] << " != " << matrix->data[index] << ")" << endl;
+						out << "matrix[" << setw(4) << ix << " " << setw(4) << iy << " " << setw(4) << iz << "] (" << this->data[index] << " != " << matrix->data[index] << ")" << endl;
 					}
 				}
 
