@@ -893,7 +893,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	try {
 		unsigned long iterations = 0;
 		double normRhs = cl_rhs->l2Norm();
-		if(normRhs < 1e-9) normRhs = 1.0;
+		if(normRhs < 1e-9 || ::isnan(normRhs) || ::isinf(normRhs)) normRhs = 1.0;
 
 		cout << "  normRHS  = " << normRhs << endl;
 #if VERBOSE == 1
