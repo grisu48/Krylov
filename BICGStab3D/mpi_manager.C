@@ -305,6 +305,39 @@ void mpi_manager_3D::setup(NumArray<int> &nproc, NumArray<int> &mx) {
 }
 
 
+grid_1D mpi_manager_3D::make_LocalGrid1D(grid_1D &GlobalGrid1D, int dir) {
+	int mx = GlobalGrid1D.get_mx();
+	double xb = GlobalGrid1D.get_xb();
+	double Len = GlobalGrid1D.get_Len();
+
+	// Now compute local extent of grid (cell-wise and space-wise)
+	if (rank == 0) {
+		// std::cout << " The grid: " << dir << " " <<mx[dir] << " " << nproc[dir] << std::endl;
+		mx /= nproc[dir];
+		Len /= nproc[dir];
+	}
+
+	MPI_Barrier(comm3d);
+	MPI_Bcast(&mx, 1, MPI_INT, 0, comm3d);
+	MPI_Bcast(&Len, 1, MPI_DOUBLE, 0, comm3d);
+	MPI_Bcast(&xb, 1, MPI_DOUBLE, 0, comm3d);
+	MPI_Barrier(comm3d);
+
+	// Now the local computations that need to be done by each rank:
+	double xe;
+	xb += Len*coords[dir];
+	xe += xb + Len;
+	xb += Len*coords[dir];
+	xe = xb + Len;
+
+	int rim = GlobalGrid1D.get_rim();
+
+	grid_1D grid_loc(xb, xe, mx+1, 2, 0, true);
+
+	return grid_loc;
+
+}
+
 
 grid_manager mpi_manager_3D::make_LocalGrid(grid_manager &GlobalGrid) {
 	//! Take the global grid and generate a local one

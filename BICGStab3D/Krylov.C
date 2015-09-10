@@ -25,7 +25,6 @@ Krylov::Krylov() {
 	}
 	breaktol = 1e-3;
 	eps = 1e-3;
-	LValue = 0.0;
 }
 
 Krylov::~Krylov() {
@@ -504,13 +503,12 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
 	}
 
 	double coeff[dim];
-	// cout << " Coeffs: ";
+//	 cout << " Coeffs: ";
 	for(int dir=0; dir<dim; ++dir) {
 		coeff[dir] = DiffDiag[dir]/sqr(delx[dir]);
 		// cout << coeff[dir] << " " << sqr(delx[dir]) << " ";
 	}
 	// cout << endl;
-	// cout << " mx " << mx[1] << endl;
 
 	bounds.do_BCs(psi, 1);
 
@@ -528,6 +526,7 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
 					                              psi(ix,iy,iz-1)) -
 					                    (2.*(coeff[0] + coeff[1] + coeff[2]) + lambda(ix,iy,iz)) * psi(ix,iy,iz));
 					vecOut(ix,iy,iz) = value;
+
 				}
 			}
 		}

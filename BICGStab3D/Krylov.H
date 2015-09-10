@@ -23,13 +23,9 @@ public:
 
 protected:
 	/**  Dimension of the solver. For the 3d solver it is always 3 */
-	int dim;
-	int debug;
-
 	double delx[3];
 	double DiffDiag[3];
 	double breaktol, eps;
-	int LValue;
 
 	/**
 	 * Calculate the Residual out of the given matrices
@@ -68,15 +64,18 @@ protected:
 	 * @param vecB Matrix B
 	 * @return the dot-product of matrix B and matrix B
 	 */
-	static double dot_product(NumMatrix<double,3> &vecA,
+	double dot_product(NumMatrix<double,3> &vecA,
 			NumMatrix<double,3> &vecB);
+//	static double dot_product(NumMatrix<double,3> &vecA,
+//			NumMatrix<double,3> &vecB);
 	/**
 	 * Calculate the l2-norm of the given vector. The l2-norm or Eucledian Norm is the square root of the sum of the squares of the indices.
 	 * (l2 = sqrt( sum( (x^2) ) )
 	 * @param vec Vector of whom the l2 norm is calculated from
 	 * @return the l2-norm of the given vector
 	 */
-	static double get_l2Norm(NumMatrix<double,3> &vec);
+//	static double get_l2Norm(NumMatrix<double,3> &vec);
+	double get_l2Norm(NumMatrix<double,3> &vec);
 
 	/**
 	 * Multiply
