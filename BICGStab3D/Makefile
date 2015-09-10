@@ -36,6 +36,9 @@ solveLin_BICGStab.o: solveLin_BICGStab.C
 solveLin_BICGStab_mpi.o: solveLin_BICGStab.C
 	$(MPICXX) $(CXXFLAGS) -D parallel -c $< -o $@
 
+Krylov.o:	Krylov.C Krylov.H
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 main.o: main.C
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -45,10 +48,10 @@ main_mpi.o: main.C
 mpi_manager.o: mpi_manager.C mpi_manager.H
 	$(MPICXX) $(CXXFLAGS) -c $< -o $@
 
-PrimBICG: main.o  grid_manager.o BoundaryHandler.o Hdf5File.o solveLin_BICGStab.o
+PrimBICG: main.o  grid_manager.o BoundaryHandler.o Hdf5File.o solveLin_BICGStab.o Krylov.o
 	$(CXX) $^ $(LDFLAGS) $(LOADLIBES) -o $@
 
-PrimBICG_mpi: main_mpi.o  grid_manager.o BoundaryHandler_mpi.o Hdf5File_mpi.o solveLin_BICGStab_mpi.o mpi_manager.o
+PrimBICG_mpi: main_mpi.o  grid_manager.o BoundaryHandler_mpi.o Hdf5File_mpi.o solveLin_BICGStab_mpi.o mpi_manager.o Krylov.o
 	$(MPICXX) $^ $(LDFLAGS) $(LOADLIBES) -o $@
 
 clean:

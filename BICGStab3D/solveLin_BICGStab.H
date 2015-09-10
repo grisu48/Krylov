@@ -6,8 +6,9 @@
 #include "grid_manager.H"
 #include "BoundaryHandler.H"
 #include "LinSolver3D.hpp"
+#include "Krylov.H"
 
-class BICGStab : public Linsolver3D
+class BICGStab : public Krylov
 {
 public:
 	BICGStab(grid_manager &TheGrid, double tol, int LValue,
@@ -38,46 +39,18 @@ public:
 	               NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
 private:
 	void make_Arrays(int mx, int my, int mz);
-	void get_Residual(BoundaryHandler3D &bounds,
-	                  NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
-	                  NumMatrix<double,3> &lambda,
-	                  NumMatrix<double,3> &residual,
-	                  NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
-	                  NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
-	void get_Residual(BoundaryHandler3D &bounds,
-	                  NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
-	                  NumMatrix<double,3> &lambda,
-	                  NumMatrix<double,3> &residual);
-	double dot_product(NumMatrix<double,3> &vecA,
-	                   NumMatrix<double,3> &vecB);
-	double get_l2Norm(NumMatrix<double,3> &vec);
+
 	void add_MatTimesVec(NumMatrix<double,3> &result,
 	                     NumMatrix<double,3> &vec);
-	void multiply_withMat(BoundaryHandler3D &bounds,
-	                      NumMatrix<double,3> &vecIn,
-	                      NumMatrix<double,3> &lambda,
-	                      NumMatrix<double,3> &Dxx,
-	                      NumMatrix<double,3> &Dyy,
-	                      NumMatrix<double,3> &Dzz,
-	                      NumMatrix<double,3> &Dxy,
-	                      NumMatrix<double,3> &vecOut,
-	                      bool apply_bcs=true);
-	void multiply_withMat(BoundaryHandler3D &bounds,
-	                      NumMatrix<double,3> &vecIn,
-	                      NumMatrix<double,3> &lambda,
-	                      NumMatrix<double,3> &vecOut,
-	                      bool apply_bcs=true);
+
 #ifdef parallel
 	MPI_Comm comm3d;
 #endif
 	NumMatrix<double,3> *residuals, *uMat;
 	NumMatrix<double,3> resTilde;
 	//	NumMatrix<double,3> storage;
-	double delx[3];
-	double DiffDiag[3];
-	double breaktol, eps;
-	int LValue, dim;
-	int rank, debug;
+
+	int rank;
 	bool use_spatialDiffusion, use_offDiagDiffusion;
 
 
