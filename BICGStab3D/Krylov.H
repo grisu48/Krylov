@@ -23,13 +23,9 @@ public:
 
 protected:
 	/**  Dimension of the solver. For the 3d solver it is always 3 */
-	int dim;
-	int debug;
-
 	double delx[3];
 	double DiffDiag[3];
 	double breaktol, eps;
-	int LValue;
 
 	/**
 	 * Calculate the Residual out of the given matrices
@@ -61,22 +57,25 @@ protected:
 	void get_Residual(BoundaryHandler3D &bounds,
 			NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
 			NumMatrix<double,3> &lambda,
-			NumMatrix<double,3> &residual);
+			NumMatrix<double,3> &residual, bool hint=false);
 	/**
 	 * Calculate the dot product of two given matrices
 	 * @param vecA Matrix A
 	 * @param vecB Matrix B
 	 * @return the dot-product of matrix B and matrix B
 	 */
-	static double dot_product(NumMatrix<double,3> &vecA,
+	double dot_product(NumMatrix<double,3> &vecA,
 			NumMatrix<double,3> &vecB);
+//	static double dot_product(NumMatrix<double,3> &vecA,
+//			NumMatrix<double,3> &vecB);
 	/**
 	 * Calculate the l2-norm of the given vector. The l2-norm or Eucledian Norm is the square root of the sum of the squares of the indices.
 	 * (l2 = sqrt( sum( (x^2) ) )
 	 * @param vec Vector of whom the l2 norm is calculated from
 	 * @return the l2-norm of the given vector
 	 */
-	static double get_l2Norm(NumMatrix<double,3> &vec);
+//	static double get_l2Norm(NumMatrix<double,3> &vec);
+	double get_l2Norm(NumMatrix<double,3> &vec);
 
 	/**
 	 * Multiply
@@ -112,7 +111,23 @@ protected:
 			NumMatrix<double,3> &vecIn,
 			NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &vecOut,
-			bool apply_bcs=true);
+			bool apply_bcs=true, bool hint=false);
+
+	/**
+	 * Check whether float variable is nan (works also with optimisation)
+	 * @param x variable to be checked
+	 */
+	bool reallyIsNan(float x);
+
+
+	/**
+		 * Store advection matrix
+		 * @param uext external velocitiy field component
+		 * @param bounds boundary handler
+		 * @param dir number of vector field component
+		 */
+	virtual void set_Advection(NumMatrix<double,3> &uext,
+			BoundaryHandler3D &bounds, int dir);
 };
 
 #endif /* KRYLOV_HPP_ */

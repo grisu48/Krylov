@@ -124,15 +124,24 @@ int main(int argc, char *argv[]) {
 	grid_manager MyGrid(0., 0., 0., 1., 1., 1., Nx_global[0],
 	                    Nx_global[1], Nx_global[2], 1);
 
+	grid_1D grid_x(0, 1, Nx_global[0], 2, 0, true);
+	grid_1D grid_y(0, 1, Nx_global[1], 2, 0, true);
+	grid_1D grid_z(0, 1, Nx_global[2], 2, 0, true);
+
 #ifdef parallel
 	NumArray<int> nproc(3);
 	nproc[0] = 2;
-	nproc[1] = 2;
-	nproc[2] = 2;
+	nproc[1] = 1;
+	nproc[2] = 1;
 	mpi_manager_3D MyMPI(nproc, mx_global);
 
 	// Grid for single mpi process
 	grid_manager LocalGrid = MyMPI.make_LocalGrid(MyGrid);
+
+	grid_1D grid_x_local = MyMPI.make_LocalGrid1D(grid_x, 0);
+	grid_1D grid_y_local = MyMPI.make_LocalGrid1D(grid_y, 1);
+	grid_1D grid_z_local = MyMPI.make_LocalGrid1D(grid_z, 2);
+
 #endif
 
 	for(int bound=0; bound<6; ++bound) {
@@ -418,11 +427,21 @@ int main(int argc, char *argv[]) {
 	cout << " bauen " << endl;
 	Linsolver3D *lin_solver = NULL;
 
+//#ifdef parallel
+//	lin_solver = new BICGStab(LocalGrid, tolerance, 2, MyMPI);
+//#else
+//	lin_solver = new BICGStab(MyGrid, tolerance, 2);
+//#endif
+
+	lin_solver = new BICGStab();
+	NumArray<int> pars(1);
+	pars(0) = 2;
 #ifdef parallel
-	lin_solver = new BICGStab(LocalGrid, tolerance, 2, MyMPI);
+	lin_solver->setup(grid_x_local, grid_y_local, grid_z_local, tolerance, pars, false, false, MyMPI);
 #else
-	lin_solver = new BICGStab(MyGrid, tolerance, 2);
+	lin_solver->setup(grid_x, grid_y, grid_z, tolerance, pars, false, false);
 #endif
+
 
 	// SteadyDiffSolver.solve(MyBounds, phi, rhs, lambda,
 	//                        DiffTens[0], DiffTens[1], DiffTens[2], true);

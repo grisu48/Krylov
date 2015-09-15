@@ -104,7 +104,10 @@ BICGStab::BICGStab(grid_manager &TheGrid, double tol, int LValue,
 	this->rank = 0;
 #endif
 
+	my_type = 20;
+
 	this->LValue = LValue;
+	dim = 3;
 
 	int mx[3];
 	for(int dir=0; dir<3; ++dir) {
@@ -116,6 +119,48 @@ BICGStab::BICGStab(grid_manager &TheGrid, double tol, int LValue,
 	this->eps = tol;
 	make_Arrays(mx[0], mx[1], mx[2]);
 }
+
+
+void BICGStab::setup(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid, double epsilon_,
+		NumArray<int> &solverPars,
+		bool spatial_diffusion, bool allow_offDiagDiffusion,
+#ifdef parallel
+		mpi_manager_3D &MyMPI,
+#endif
+		int maxIter) {
+
+#ifdef parallel
+	this->comm3d = MyMPI.comm3d;
+	this->rank   = MyMPI.get_rank();
+#else
+	this->rank = 0;
+#endif
+
+	this->eps = epsilon_;
+	this->LValue = solverPars(0);
+	this->dim = 3;
+
+	set_Grid(xGrid, yGrid, zGrid);
+
+	make_Arrays(mx[0], mx[1], mx[2]);
+
+}
+
+void BICGStab::set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid) {
+	//! Store all relevant data of grid
+	delx[0] = xGrid.get_del();
+	delx[1] = yGrid.get_del();
+	delx[2] = zGrid.get_del();
+
+	mx[0] = xGrid.get_mx();
+	mx[1] = yGrid.get_mx();
+	mx[2] = zGrid.get_mx();
+
+	//cout << " Grid " << mx[0] << " " << delx[0] << endl;
+
+	return;
+}
+
 
 void BICGStab::make_Arrays(int mx, int my, int mz) {
 	residuals = new NumMatrix<double,3> [LValue+1];
@@ -137,7 +182,6 @@ void BICGStab::make_Arrays(int mx, int my, int mz) {
 
 
 
-
 void BICGStab::add_MatTimesVec(NumMatrix<double,3> &result,
                                NumMatrix<double,3> &vec) {
 }
@@ -145,7 +189,8 @@ void BICGStab::add_MatTimesVec(NumMatrix<double,3> &result,
 
 void BICGStab::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
                      NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
-                     double D_xx, double D_yy, double D_zz, int debug) {
+                     double D_xx, double D_yy, double D_zz, int debug,
+                     double delt, bool evolve_time) {
 	//! Main solver routine
 	/*! Solves equations of the form:
 	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
@@ -156,7 +201,7 @@ void BICGStab::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 	DiffDiag[1] = D_yy;
 	DiffDiag[2] = D_zz;
 
-	solve_int(bounds, phi, rhs, lambda, rhs, rhs, rhs, rhs);
+	solve_int(bounds, phi, rhs, lambda, rhs, rhs, rhs, rhs, debug);
 }
 
 
@@ -164,7 +209,8 @@ void BICGStab::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
                      NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
                      NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
                      NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
-                     int debug, bool use_offDiagDiffusion) {
+                     int debug, bool use_offDiagDiffusion,
+                     double delt, bool evolve_time) {
 	//! Main solver routine
 	/*! Solves equations of the form:
 	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
@@ -176,14 +222,28 @@ void BICGStab::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 		Dxy.clear();
 	}
 
-	solve_int(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dxy);
+	solve_int(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dxy, debug);
+}
+
+void BICGStab::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+                     NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+                     NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+                     NumMatrix<double,3> &Dzz,
+                     int debug, double delt, bool evolve_time) {
+	//! Main solver routine
+	/*! Solves equations of the form:
+	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
+	 */
+	solve(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dzz, debug);
 }
 
 void BICGStab::solve_int(BoundaryHandler3D &bounds,
-                         NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
-                         NumMatrix<double,3> &lambda,
-                         NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
-                         NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy) {
+		NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
+		NumMatrix<double,3> &lambda,
+		NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+		NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug) {
+
+//	rhs *= -1.;
 
 	// Do boundaries if necessary for all variables:
 #ifdef parallel
@@ -217,8 +277,6 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	// cout << "\thash(lambda)  = " << hash(lambda) << endl;
 
 
-	cout << "  normRHS = " << normRHS << endl;
-
 
 	int iter_steps=0;
 
@@ -229,6 +287,19 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	} else {
 		get_Residual(bounds, phi, rhs, lambda, residuals[0]);
 	}
+
+	double norm_init = get_l2Norm(residuals[0]);
+
+	if(norm_init < eps*normRHS) {
+		if(debug>2 && true) {
+			cout << " Initial Norm: " << norm_init << " " << norm_init/normRHS << " ";
+			cout << normRHS << " " << eps*normRHS << " "  << iter_steps << endl;
+			cout << " Doing no iterations " << endl;
+		}
+		return;
+		//
+	}
+
 
 	resTilde = residuals[0];
 	// cout << "<resTilde,resTilde> = " << dot_product(resTilde, resTilde) << endl;
@@ -246,7 +317,7 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 	do {
 		iter_steps++;
 		//		if(iter_steps==15) exit(3);
-		if(rank==0 && debug>2) {
+		if(rank==0 && debug>2 || false) {
 			cout << " Iteration: " << iter_steps;
 			if(iter_steps > 1) {
 				iteration_runtime += time_ms();
@@ -257,27 +328,19 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			//cout << "    hash(phi) = " << hash(phi) << endl;
 		}
 
-		// cout << "omega = " << omega << endl;
 		rho0 *= -omega;
-		// cout << "rho0 = " << rho0 << endl;
-
-
 
 
 		// BI-CG part:
 		for(int jj=0; jj<LValue; ++jj) {
-			// cout << "jj iteration " << jj << endl;
 
 			// cout << "residual[" << jj << "]) = " << hash(residuals[jj]) << endl;
 
 			rho1 = dot_product(residuals[jj], resTilde);
-			// cout << "rho1 = " << rho1 << endl;
 
 			double beta = alpha*rho1/rho0;
-			// cout << "beta = " << beta << endl;
-			//			cout << " Anf: " << beta << " " << rho0 << " " << rho1 << " " << alpha << endl;
-			//			cout << " Some vals " << residuals[jj](3,5,9) << " " << resTilde(3,5,9) << endl;
 			rho0 = rho1;
+
 
 			// \hat u_i = \hat r_i - \beta \hat u_i
 			for(int ii=0; ii<=jj; ++ii) {
@@ -315,16 +378,10 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			//cout << "<uMat[" << jj+1 << "],uMat[" << jj+1 << "]> = " << dot_product(uMat[jj+1], uMat[jj+1]) << endl;
 
 			alpha = rho0/dot_product(uMat[jj+1], resTilde);
-			// cout << "alpha = " << alpha << endl;
-			// cout << " rho " << alpha << " " << rho0 << " " << dot_product(uMat[jj+1], resTilde) << endl;
-			// cout << " Beta " << beta << " " << rho1 << endl;
 
-			// cout << " resjj f " << residuals[jj](3,5,9) << " " << uMat[jj+1](3,5,9) << " " << alpha << endl;
 			for(int ii=0; ii<=jj; ++ii) {
 				residuals[ii] -= uMat[ii+1]*alpha;
 			}
-			// cout << " resjj " << residuals[jj](3,5,9) << " " << uMat[jj+1](3,5,9) <<  endl;
-			// exit(3);
 
 			// \hat r_{j+1} = A \hat r_j
 			if(use_spatialDiffusion) {
@@ -336,7 +393,12 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 			phi += uMat[0]*alpha;
 
 			//cout << "End jj iteration " << jj << " - hash(phi) = " << hash(phi) << endl;
+			if(reallyIsNan(alpha)) {
+				cout << " alpha is nan " << jj << " " << rho0 << " " << rho1 << " " << beta << endl;
+				exit(1);
+			}
 		}
+
 
 		//cout << "alpha = " << alpha << endl;
 		//cout << "<phi, phi> = " << dot_product(phi, phi) << endl;
@@ -390,9 +452,12 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		}
 
 		norm = get_l2Norm(residuals[0]);
-		if(rank==0 && debug>2) {
+		if(rank==0 && debug>2 || false) {
 			std::cout << " My error norm: " << norm << " ";
-			std::cout << sqrt(norm) << " " << eps*normRHS;
+			std::cout << sqrt(norm) << " " << eps*normRHS << " ";
+			std::cout << eps << " " << normRHS << " ";
+			std::cout << endl;
+
 
 #if 0
 			const double hash_phi = hash(phi);
@@ -412,15 +477,25 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 #endif
 		}
 
+//		if(iter_steps>1) exit(3);
+		if(reallyIsNan(norm)) {
+			cout << " Norm is nan at iteration " << iter_steps << endl;
+			exit(3);
+		}
 
 	} while (norm > eps*normRHS);
 
-	if(rank==0) {
+	if(rank==0 && debug>2) {
 //	if(rank==0 && debug>0) {
 		std::cout << " Final error: " << norm << " after " << iter_steps;
 		std::cout << " iterations " << endl;
 	}
-	cout << residuals[0](3,11,8) << endl;
+
+	if(rank==0 && debug>2) {
+		cout << " Norm: " << norm << " " << norm/normRHS << " " << normRHS << " ";
+		cout << eps*normRHS << " "  << iter_steps << endl;
+	}
+//	cout << residuals[0](3,11,8) << endl;
 
 	// Check residual again:
 	// compute r_0
@@ -428,13 +503,17 @@ void BICGStab::solve_int(BoundaryHandler3D &bounds,
 		get_Residual(bounds, phi, rhs, lambda, residuals[0],
 		             Dxx, Dyy, Dzz, Dxy);
 	} else {
-		get_Residual(bounds, phi, rhs, lambda, residuals[0]);
+		get_Residual(bounds, phi, rhs, lambda, residuals[0], true);
 	}
 	norm = get_l2Norm(residuals[0]);
-	cout << " Other? norm " << norm << endl;
-	cout << residuals[0](3,11,8) << endl;
+
+	if(rank==0 && false) {
+		cout << " The norm: " << norm << endl;
+	}
 
 	// printFull(phi, "Result_Phi", false);
 
 	// Solution is returned as stored in phi
 }
+
+

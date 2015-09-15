@@ -92,6 +92,7 @@ public:
 	void setup(NumArray<int> &nproc, NumArray<int> &mx);
 	mpi_manager_2D boil_down(int plane_normal);
 	grid_manager make_LocalGrid(grid_manager &GlobalGrid);
+	grid_1D make_LocalGrid1D(grid_1D &GlobalGrid1D, int dir);
 	int get_rank() const;
 	int get_left() const;
 	int get_right() const;

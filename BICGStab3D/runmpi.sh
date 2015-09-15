@@ -1,1 +1,1 @@
-mpirun -np 4 -v ./Linux-amd64/PrimBICG_mpi 128
+mpirun -np 2 -v ./Linux-amd64/PrimBICG_mpi 64
