@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
 #ifdef parallel
 	NumArray<int> nproc(3);
 	nproc[0] = 2;
-	nproc[1] = 1;
+	nproc[1] = 3;
 	nproc[2] = 1;
 	mpi_manager_3D MyMPI(nproc, mx_global);
 

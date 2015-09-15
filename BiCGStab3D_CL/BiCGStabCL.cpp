@@ -62,6 +62,8 @@ using namespace flexCL;
 // Delete routine including a NULL check and assignment
 #define DELETE(x) { if(x!=NULL) delete x; x = NULL; }
 
+#define MARK_USED(x) (void)(x);
+
 /* ==== DEBUGGING ACTIONS ====================================================================== */
 
 // Some random hash function for the matrix
@@ -451,8 +453,64 @@ void BiCGStabSolver::cleanupContext(void) {
 
 
 void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+                     NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+                     double D_xx, double D_yy, double D_zz, int debug,
+                     double delt, bool evolve_time) {
+	//! Main solver routine
+	/*! Solves equations of the form:
+	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
+	 */
+	this->debug = debug;
+	this->use_spatialDiffusion = false;
+	this->diffDiag[0] = D_xx;
+	this->diffDiag[1] = D_yy;
+	this->diffDiag[2] = D_zz;
+
+	// Run solver routine
+	solve_int(bounds, phi, rhs, lambda, rhs, rhs, rhs, rhs, debug);
+}
+
+
+void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+                     NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+                     NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+                     NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
+                     int debug, bool use_offDiagDiffusion,
+                     double delt, bool evolve_time) {
+	//! Main solver routine
+	/*! Solves equations of the form:
+	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
+	 */
+	this->use_spatialDiffusion = true;
+	this->debug = debug;
+	this->use_offDiagDiffusion = use_offDiagDiffusion;
+	if(!use_offDiagDiffusion)
+		Dxy.clear();
+
+
+	// Run solver routine
+	solve_int(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dxy, debug);
+}
+
+void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+                     NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+                     NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+                     NumMatrix<double,3> &Dzz,
+                     int debug, double delt, bool evolve_time) {
+	//! Main solver routine
+	/*! Solves equations of the form:
+	  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
+	 */
+	solve(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dzz, debug);
+}
+
+#if 0
+void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 		NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
-		double D_xx, double D_yy, double D_zz, int debug) {
+		double D_xx, double D_yy, double D_zz, int debug, double delta, bool evolve_time) {
+
+	MARK_USED(evolve_time);
+	MARK_USED(delta);
 
 	this->debug = debug;
 	this->use_spatialDiffusion = false;
@@ -463,11 +521,34 @@ void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 	solve_int(bounds, phi, rhs, lambda, rhs, rhs, rhs, rhs);
 
 }
+
+void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+		NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+		NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+		NumMatrix<double,3> &Dzz,
+		int debug, double delta, bool evolve_time) {
+
+	MARK_USED(evolve_time);
+	MARK_USED(delta);
+	this->debug = debug;
+	//! Main solver routine
+	/*! Solves equations of the form:
+		  \nabla\cdot\left(D\nabla \phi\right) - \lambda \phi = rhs
+	 */
+	solve(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dzz, debug);
+
+}
+
 void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 		NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 		NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 		NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
-		int debug, bool use_offDiagDiffusion) {
+		int debug, bool use_offDiagDiffusion,
+		double delta, bool evolve_time) {
+
+	MARK_USED(evolve_time);
+	MARK_USED(delta);
+	this->debug = debug;
 
 	this->use_spatialDiffusion = true;
 	this->use_offDiagDiffusion = use_offDiagDiffusion;
@@ -479,6 +560,7 @@ void BiCGStabSolver::solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 	solve_int(bounds, phi, rhs, lambda, Dxx, Dyy, Dzz, Dxy);
 
 }
+#endif
 
 
 /** Transfers the given NumMatrix to the given OpenCL context */
@@ -780,13 +862,17 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		NumMatrix<double,3> &Dxx,
 		NumMatrix<double,3> &Dyy,
 		NumMatrix<double,3> &Dzz,
-		NumMatrix<double,3> &Dxy) {
+		NumMatrix<double,3> &Dxy,
+		int debug) {
+	MARK_USED(bounds);
+
 #if VERBOSE == 1
 	cout << "BiCGStabSolver::solve_int(...)" << endl;
 #endif
 	if(!isInitialized()) this->setupContext();
 	this->_steptime_min = 0L;
 	this->_steptime_max = 0L;
+	this->debug = debug;
 
 	/*
 	 * -- Problem description: --
@@ -928,6 +1014,11 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		long runtime = -time_ms();
 		bool initialStep = true;
 		do {
+			// Check for maximum iterations reached
+			if(this->_maxIterations > 0 && (long)iterations > this->_maxIterations)
+				throw NumException("Maximum iterations reached");
+
+
 			iterations++;
 			if(this->verbose) {
 				if(iterations > 1) {
@@ -1161,4 +1252,56 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 	DELETE(cl_Dyy);
 	DELETE(cl_Dzz);
 	DELETE(cl_Dxy);
+}
+
+void BiCGStabSolver::set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid) {
+	// Mark unused variables used
+	MARK_USED(xGrid);
+	MARK_USED(yGrid);
+	MARK_USED(zGrid);
+}
+
+void BiCGStabSolver::set_Advection(NumMatrix<double,3> &ux_fine, BoundaryHandler3D &bounds, int dir) {
+	MARK_USED(ux_fine);
+	MARK_USED(bounds);
+	MARK_USED(dir);
+
+	throw "Advection not yet implemented for BiCGStab solver";
+}
+
+void BiCGStabSolver::setup(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid, double epsilon_,
+		NumArray<int> &solverPars,
+		bool spatial_diffusion, bool allow_offDiagDiffusion,
+#ifdef parallel
+		 mpi_manager_3D &MyMPI,
+#endif
+		int maxIter) {
+
+	// Mark unused variables used
+	MARK_USED(xGrid);
+	MARK_USED(yGrid);
+	MARK_USED(zGrid);
+	MARK_USED(solverPars);
+
+
+#ifdef parallel
+	this->comm3d = MyMPI.comm3d;
+	this->rank   = MyMPI.get_rank();
+#else
+	this->rank = 0;
+#endif
+
+
+#ifdef parallel
+	MARK_USED(MyMPI);
+#endif
+
+	this->tolerance = epsilon_;
+	this->_maxIterations = maxIter;
+	this->lValue = solverPars(0);
+	this->dim = 3;
+	this->use_spatialDiffusion = spatial_diffusion;
+	this->use_offDiagDiffusion = allow_offDiagDiffusion;
+
+	this->set_Grid(xGrid, yGrid, zGrid);
 }

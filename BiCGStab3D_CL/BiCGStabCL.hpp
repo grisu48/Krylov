@@ -22,6 +22,9 @@
 #endif
 
 
+/**
+ * Numerical exception
+ */
 class NumException : public std::exception {
 private:
 	std::string _message;
@@ -34,6 +37,11 @@ public:
 	virtual const char* what() const _GLIBCXX_USE_NOEXCEPT { return this->_message.c_str(); }
 };
 
+
+/**
+ * OpenCL driven BiCGStab solver
+ * It is a extension of Linsolver3D, so it can be implemented in the PICARD code
+ */
 class BiCGStabSolver: public Linsolver3D {
 private:
 
@@ -62,6 +70,9 @@ protected:
 
 	/** Stored number of iterations used for solve */
 	long _iterations;
+
+	/** Maximum number of iterations or 0, if no limit exists */
+	long _maxIterations = 0;
 
 	size_t mx[3];
 	double deltaX[3];
@@ -118,6 +129,21 @@ public:
 	void setVerbose(bool);
 	long iterations(void);
 
+
+	/**
+	 * Setup method.
+	 * This method is used instead of a constructor to allow the solver instance to be escaped.
+	 * This is ugly but needed since it is planned to be implemented in code, that works this way
+	 */
+	virtual void setup(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid, double epsilon_,
+			NumArray<int> &solverPars,
+			bool spatial_diffusion, bool allow_offDiagDiffusion,
+#ifdef parallel
+			 mpi_manager_3D &MyMPI,
+#endif
+			int maxIter=0);
+
+#if 0
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			double D_xx, double D_yy, double D_zz, int debug=0);
@@ -130,12 +156,47 @@ public:
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy);
+#endif
+
+
+	/** Set the advection matrix */
+	virtual void set_Advection(NumMatrix<double,3> &ux_fine, BoundaryHandler3D &bounds, int dir);
+
+	/** Solve with diagonal diffusion matrix */
+	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+			double D_xx, double D_yy, double D_zz, int debug=0, double delt=0., bool evolve_time=false);
+	/** Solve with diffusion matrix without off-diagonal elements*/
+	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+			NumMatrix<double,3> &Dzz,
+			int debug=0, double delt=0., bool evolve_time=false);
+	/** Solve with arbitrary diffusion matrix */
+	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
+			int debug=0, bool use_offDiagDiffusion=false,
+			double delt=0., bool evolve_time=false);
 
 	/** Minimum step time for the calculation (Milliseconds) */
 	long steptimeMin(void);
 
 	/** Maximum step time for the calculation (Milliseconds) */
 	long steptimeMax(void);
+
+protected:
+	/** Internal used solve method. This is the actual solver */
+	virtual void solve_int(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
+			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
+			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
+			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0);
+
+	/** Set the grid. Inherited from Linsolver3D */
+	virtual void set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid);
+
+
 };
 
 #endif /* BICGSTABCL_HPP_ */

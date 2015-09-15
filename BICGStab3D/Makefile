@@ -1,6 +1,9 @@
 include $(HOME)/src/makeinclude/include.mak
 
-OFLAGS  =  $(X_OFLAGS) -Wall -fexceptions -O0 -g
+# This are debugging flags.
+#OFLAGS  =  $(X_OFLAGS) -Wall -fexceptions -O0 -g
+# These are the productive flags. They hide lots of debug and do heavy optimisations
+OFLAGS  =  $(X_OFLAGS) -Wall -fexceptions -O3 -DNDEBUG
 
 CXXFLAGS = $(OFLAGS) -I.. $(X_INC) $(X_NO_AUTO_INCLUDE)
 
