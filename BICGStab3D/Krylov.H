@@ -57,7 +57,7 @@ protected:
 	void get_Residual(BoundaryHandler3D &bounds,
 			NumMatrix<double,3> &phi, NumMatrix<double,3> &rhs,
 			NumMatrix<double,3> &lambda,
-			NumMatrix<double,3> &residual);
+			NumMatrix<double,3> &residual, bool hint=false);
 	/**
 	 * Calculate the dot product of two given matrices
 	 * @param vecA Matrix A
@@ -111,7 +111,23 @@ protected:
 			NumMatrix<double,3> &vecIn,
 			NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &vecOut,
-			bool apply_bcs=true);
+			bool apply_bcs=true, bool hint=false);
+
+	/**
+	 * Check whether float variable is nan (works also with optimisation)
+	 * @param x variable to be checked
+	 */
+	bool reallyIsNan(float x);
+
+
+	/**
+		 * Store advection matrix
+		 * @param uext external velocitiy field component
+		 * @param bounds boundary handler
+		 * @param dir number of vector field component
+		 */
+	virtual void set_Advection(NumMatrix<double,3> &uext,
+			BoundaryHandler3D &bounds, int dir);
 };
 
 #endif /* KRYLOV_HPP_ */

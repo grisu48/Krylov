@@ -17,10 +17,10 @@
 class Linsolver3D {
 public:
 	Linsolver3D() {dim=3; debug=0;}
-	virtual ~Linsolver3D(){}
+	virtual ~Linsolver3D(){my_type=-1;}
 
 	virtual void setup(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid, double epsilon_,
-			NumArray<int> solverPars,
+			NumArray<int> &solverPars,
 			bool spatial_diffusion, bool allow_offDiagDiffusion,
 #ifdef parallel
 			 mpi_manager_3D &MyMPI,
@@ -44,15 +44,16 @@ public:
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy,
 			int debug=0, bool use_offDiagDiffusion=false,
 			double delt=0., bool evolve_time=false) = 0;
-
+	virtual void set_Advection(NumMatrix<double,3> &ux_fine,
+			BoundaryHandler3D &bounds, int dir) = 0;
+	int my_type;
 protected:
 	virtual void solve_int(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
-			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0,
-			double delt=0., bool evolve_time=false) = 0;
+			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0) = 0;
 	// Internal grid storage routine
-	virtual void set_grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid) = 0;
+	virtual void set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid) = 0;
 #ifdef parallel
 	MPI_Comm comm3d;
 #endif

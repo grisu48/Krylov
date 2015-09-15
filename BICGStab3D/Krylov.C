@@ -7,7 +7,7 @@
 
 #include "Krylov.H"
 #include "math.h"
-
+#include <stdlib.h>     /* exit, EXIT_FAILURE */
 
 using namespace std;
 
@@ -62,6 +62,8 @@ double Krylov::get_l2Norm(NumMatrix<double,3> &vec) {
 	              comm3d);
 	valMax = global_max;
 #endif
+//	valMax = 1.;
+
 	if(valMax == 0.) return 0;
 	double scaleFactor = 1./valMax;
 
@@ -75,7 +77,6 @@ double Krylov::get_l2Norm(NumMatrix<double,3> &vec) {
 		// 		}
 		// 	}
 
-//		cout << " Scale: " << valMax << " " << vec(16,16,16) << " " << vec(0,3,3) << " " << mymax << endl;;
 		// }
 		for(int iz = 1; iz < mx[2]; iz++) {
 			for(int iy = 1; iy < mx[1]; iy++) {
@@ -149,6 +150,8 @@ double Krylov::get_l2Norm(NumMatrix<double,3> &vec) {
 	              comm3d);
 	sum = global_sum;
 #endif
+
+
 	// return l2 norm
 	return valMax*sqrt(sum);
 }
@@ -245,13 +248,15 @@ double Krylov::dot_product(NumMatrix<double,3> &vecA,
 void Krylov::get_Residual(BoundaryHandler3D &bounds,
                             NumMatrix<double,3> &psi, NumMatrix<double,3> &rhs,
                             NumMatrix<double,3> &lambda,
-                            NumMatrix<double,3> &residual){
+                            NumMatrix<double,3> &residual, bool hint){
 
 	//! Compute residual of matrix equation
 	/*! Version with spatially constant diffusion*/
 
-	multiply_withMat(bounds, psi, lambda, residual, false);
-	residual += rhs;
+	multiply_withMat(bounds, psi, lambda, residual, false, hint);
+
+	//residual += rhs;
+	residual = rhs - residual;
 
 	/*
 	ofstream fout;
@@ -316,7 +321,8 @@ void Krylov::get_Residual(BoundaryHandler3D &bounds,
 
 	multiply_withMat(bounds, psi, lambda, Dxx, Dyy, Dzz, Dxy, residual, false);
 
-	residual += rhs;
+	//residual += rhs;
+	residual = rhs - residual;
 //	int mx[dim];
 //	for(int dir=0; dir<dim; ++dir) {
 //		mx[dir] = psi.getHigh(dir)-1;
@@ -495,7 +501,7 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
                                 NumMatrix<double,3> &psi,
                                 NumMatrix<double,3> &lambda,
                                 NumMatrix<double,3> &vecOut,
-                                bool apply_bcs) {
+                                bool apply_bcs, bool hint) {
 	//! Compute residual of matrix equation (constant diffusion)
 	int mx[dim];
 	for(int dir=0; dir<dim; ++dir) {
@@ -503,12 +509,9 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
 	}
 
 	double coeff[dim];
-//	 cout << " Coeffs: ";
 	for(int dir=0; dir<dim; ++dir) {
 		coeff[dir] = DiffDiag[dir]/sqr(delx[dir]);
-		// cout << coeff[dir] << " " << sqr(delx[dir]) << " ";
 	}
-	// cout << endl;
 
 	bounds.do_BCs(psi, 1);
 
@@ -526,7 +529,6 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
 					                              psi(ix,iy,iz-1)) -
 					                    (2.*(coeff[0] + coeff[1] + coeff[2]) + lambda(ix,iy,iz)) * psi(ix,iy,iz));
 					vecOut(ix,iy,iz) = value;
-
 				}
 			}
 		}
@@ -537,3 +539,22 @@ void Krylov::multiply_withMat(BoundaryHandler3D &bounds,
 	}
 
 }
+
+
+void Krylov::set_Advection(NumMatrix<double,3> &uext,
+			BoundaryHandler3D &bounds, int dir) {
+	//! Assign vector field component of external velocity field
+	cerr << " Advection not implemented yet for Krylov solvers -- Exiting " << endl;
+	exit(3);
+}
+
+
+
+bool Krylov::reallyIsNan(float x)
+{
+    //Assumes sizeof(float) == sizeof(int)
+    int intIzedX = *(reinterpret_cast<int *>(&x));
+    int clearAllNonNanBits = intIzedX & 0x7F800000;
+    return clearAllNonNanBits == 0x7F800000;
+}
+

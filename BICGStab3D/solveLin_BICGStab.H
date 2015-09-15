@@ -27,7 +27,7 @@ public:
 	//       NumMatrix<double,3> &D_yy,
 	//       NumMatrix<double,3> &D_zz, int debug);
 	virtual void setup(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid, double epsilon_,
-			NumArray<int> solverPars,
+			NumArray<int> &solverPars,
 			bool spatial_diffusion, bool allow_offDiagDiffusion,
 #ifdef parallel
 			 mpi_manager_3D &MyMPI,
@@ -56,10 +56,9 @@ public:
 	virtual void solve_int(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
-			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0,
-			double delt=0., bool evolve_time=false);
+			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0);
 private:
-	virtual void set_grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid);
+	virtual void set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid);
 	void make_Arrays(int mx, int my, int mz);
 	void add_MatTimesVec(NumMatrix<double,3> &result,
 	                     NumMatrix<double,3> &vec);
