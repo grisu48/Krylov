@@ -417,6 +417,11 @@ void BiCGStabSolver::setupContext(void) {
 
 		this->_matrix_residuals[i]->clear();
 		this->_uMat[i]->clear();
+
+#if PROFILING == 1
+		this->_matrix_residuals[i]->setProfiling(true);
+		this->_uMat[i]->setProfiling(true);
+#endif
 	}
 
 	this->_clProgram = this->_context->createProgramFromSourceFile(KERNEL_FILENAME);
@@ -935,10 +940,19 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		cl_Dyy = transferMatrix(this->_context, Dyy, this->_matrix_rhs, this->mx);
 		cl_Dzz = transferMatrix(this->_context, Dzz, this->_matrix_rhs, this->mx);
 		cl_Dxy = transferMatrix(this->_context, Dxy, this->_matrix_rhs, this->mx);
+#if PROFILING == 1
+		cl_Dxx->setProfiling(true);
+		cl_Dyy->setProfiling(true);
+		cl_Dzz->setProfiling(true);
+		cl_Dxy->setProfiling(true);
+#endif
 	}
 	CLMatrix3d *cl_resTilde = new CLMatrix3d(this->_context, cl_phi->mx(0), cl_phi->mx(1), cl_phi->mx(2), NULL, RIM);
 	cl_resTilde->initializeContext();
 	cl_resTilde->clear();
+#if PROFILING == 1
+	cl_resTilde->setProfiling(true);
+#endif
 
 	this->_context->join();
 	cout << "Matrices transferred to host device " << endl;
@@ -995,6 +1009,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		double tau[lValue+1][lValue+1];
 		double sigma[lValue+1], gammap[lValue+1], gammapp[lValue+1];
 		double _gamma[lValue+1];
+
 
 		// Calculate r_0
 		if(use_spatialDiffusion) {
@@ -1059,6 +1074,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 
 				rho1 = this->_matrix_residuals[jj]->dotProduct(cl_resTilde);
+#if PROFILING == 1
+				cerr << "PROFILING: dotProduct -- " << this->_matrix_residuals[jj]->lastKernelRuntime() << " ns" << endl;
+#endif
 				COUT << "\trho1 = " << rho1 << endl;
 				const double beta = alpha*rho1/rho0;
 				rho0 = rho1;
@@ -1067,8 +1085,14 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				for(int ii=0; ii<=jj; ++ii) {
 					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->mul(-beta);
+#if PROFILING == 1
+					cerr << "PROFILING: Mul: " << _uMat[ii]->lastKernelRuntime() << endl;
+#endif
 					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 					_uMat[ii]->add(_matrix_residuals[ii]);
+#if PROFILING == 1
+					cerr << "PROFILING: Add: " << _uMat[ii]->lastKernelRuntime() << endl;
+#endif
 					//cout << "\thash(uMat[" << ii << "]) = " << hash_cl(_uMat[ii]) << endl;
 
 
@@ -1103,12 +1127,18 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				alpha = rho0/ (_uMat[jj+1]->dotProduct(cl_resTilde));
+#if PROFILING == 1
+				cerr << "PROFILING: dotProduct -- " << _uMat[jj+1]->lastKernelRuntime() << " ns" << endl;
+#endif
 				COUT << "\talpha = " << alpha << endl;
 
 				for(int ii=0; ii<=jj; ii++) {
 					_matrix_residuals[ii]->subMultiplied(_uMat[ii+1], alpha);
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 					if(!this->checkMatrix(this->_matrix_residuals[ii])) throw "matrix_residual check 4 failed";
+#endif
+#if PROFILING == 1
+				cerr << "PROFILING: subMultiplied -- " << this->_matrix_residuals[ii]->lastKernelRuntime() << " ns" << endl;
 #endif
 				}
 
@@ -1126,6 +1156,9 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 				cl_phi->addMultiplied(_uMat[0], alpha);
+#if PROFILING == 1
+				cerr << "PROFILING: addMultiplied -- " << cl_phi->lastKernelRuntime() << " ns" << endl;
+#endif
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 				if(!this->checkMatrix(this->_uMat[0])) throw "_uMat check 6 failed";
@@ -1150,11 +1183,18 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				for(int ii=1; ii<jj; ++ii) {
 					tau[ii][jj] = _matrix_residuals[jj]->dotProduct(_matrix_residuals[ii]) / sigma[ii];
 					_matrix_residuals[jj]->subMultiplied(_matrix_residuals[ii], tau[ii][jj]);
+#if PROFILING == 1
+				cerr << "PROFILING: subMultiplied -- " << _matrix_residuals[jj]->lastKernelRuntime() << " ns" << endl;
+#endif
 				}
 
 
 				sigma[jj] = _matrix_residuals[jj]->dotProduct();
 				gammap[jj] = _matrix_residuals[0]->dotProduct(_matrix_residuals[jj])/sigma[jj];
+#if PROFILING == 1
+				cerr << "PROFILING: dotProduct -- " << _matrix_residuals[jj]->lastKernelRuntime() << " ns" << endl;
+				cerr << "PROFILING: dotProduct -- " << _matrix_residuals[0]->lastKernelRuntime() << " ns" << endl;
+#endif
 			}
 
 			_gamma[lValue] = gammap[lValue];
@@ -1180,19 +1220,40 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 
 			// Check break conditions:
 			cl_phi->addMultiplied(_matrix_residuals[0], _gamma[1]);
+#if PROFILING == 1
+			cerr << "PROFILING: addMultiplied: " << cl_phi->lastKernelRuntime() << endl;
+#endif
 			_matrix_residuals[0]->subMultiplied(_matrix_residuals[lValue], gammap[lValue]);
+#if PROFILING == 1
+			cerr << "PROFILING: subMultiplied: " << _matrix_residuals[0]->lastKernelRuntime() << endl;
+#endif
 			_uMat[0]->subMultiplied(_uMat[lValue], _gamma[lValue]);
+#if PROFILING == 1
+			cerr << "PROFILING: addMultiplied: " << _uMat[0]->lastKernelRuntime() << endl;
+#endif
 
 			//cout << "uMat[0].hash = " << hash_cl(_uMat[0]) << endl;
 			//cout << "res[0].hash = " << hash_cl(_matrix_residuals[0]) << endl;
 
 			for(int jj=1; jj<lValue; ++jj) {
 				_uMat[0]->subMultiplied(_uMat[jj],_gamma[jj]);
+#if PROFILING == 1
+			cerr << "PROFILING: subMultiplied: " << _uMat[0]->lastKernelRuntime() << endl;
+#endif
 				cl_phi->addMultiplied(_matrix_residuals[jj],gammapp[jj]);
+#if PROFILING == 1
+			cerr << "PROFILING: addMultiplied: " << cl_phi->lastKernelRuntime() << endl;
+#endif
 				_matrix_residuals[0]->subMultiplied(_matrix_residuals[jj],gammap[jj]);
+#if PROFILING == 1
+			cerr << "PROFILING: subMultiplied: " << _matrix_residuals[0]->lastKernelRuntime() << endl;
+#endif
 			}
 
 			norm = _matrix_residuals[0]->l2Norm();
+#if PROFILING == 1
+			cerr << "PROFILING: l2Norm: " << _matrix_residuals[0]->lastKernelRuntime() << endl;
+#endif
 
 			if(this->verbose) {
 				cout << "Iteration " << iterations << ": NORM = " << norm;
