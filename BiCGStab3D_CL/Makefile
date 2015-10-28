@@ -8,7 +8,8 @@ AMDSDK_PATH=/opt/AMDAPP
 #AMDSDK_PATH=/opt/AMDAPP
 
 # ==== COMPILER FLAGS ==== #
-O_FLAGS=-Wall -Wextra -pedantic -g -O0
+#O_FLAGS=-Wall -Wextra -pedantic -g -O0
+O_FLAGS=-Wall -Wextra -pedantic -O3
 CXX=g++
 CXX_FLAGS=$(O_FLAGS) -std=c++11
 
@@ -20,7 +21,7 @@ OCL_LIBS=-lOpenCL
 GLUT_LIBS=-lm -lGLU -lglut -lGLU -lGL -lGLEW
 OBJS=FlexCL.o FlexCLMatrix.o grid_manager.o boundaryhandler.o bicgstab_cl.o
 # bicgstab.o
-LIBS=$(OCL_LIBS) $(GLUT_LIBS)
+LIBS=$(OCL_LIBS)#$(GLUT_LIBS)
 
 # ==== User configuration ===== #
 USER_LIBS=-lmatrix_mt
