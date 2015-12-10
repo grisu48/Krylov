@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <string>
 #include <sstream>
+#include <string.h>
+#include <stdint.h>
 
 #include "solveLin_BICGStab.H"
 #include "time_ms.h"
@@ -13,7 +15,14 @@ using namespace std;
 
 
 
-double hash(NumMatrix<double, 3> &matrix) {
+static inline uint64_t doubleToRawBits(double x) {
+    uint64_t bits;
+    memcpy(&bits, &x, sizeof bits);
+    return bits;
+}
+
+
+uint64_t hash(NumMatrix<double, 3> &matrix) {
 	//const long brick = 107534845447;		// Random prime number (HUGE)
 
 	ssize_t _low[3];
@@ -23,17 +32,18 @@ double hash(NumMatrix<double, 3> &matrix) {
 		_high[i]  = matrix.getHigh(i);
 	}
 
-	double value = 1.0;
+	uint64_t hashValue = 797003437L;			// Big prime number as starting point
 
-	for(ssize_t x = _low[0]; x < _high[0]; x++) {
-		for(ssize_t y = _low[1]; y < _high[1]; y++) {
-			for(ssize_t z = _low[2]; z < _high[2]; z++) {
-				value += (x*y*z) * matrix(x,y,z);
+	for(ssize_t x = _low[0]; x <= _high[0]; x++) {
+		for(ssize_t y = _low[1]; y <= _high[1]; y++) {
+			for(ssize_t z = _low[2]; z <= _high[2]; z++) {
+				//value += (x*y*z) * matrix(x,y,z);
+				hashValue = hashValue ^ doubleToRawBits(matrix(x,y,z));
 			}
 		}
 	}
 
-	return value;
+	return hashValue;
 }
 
 void print(NumMatrix<double, 3> &matrix) {
