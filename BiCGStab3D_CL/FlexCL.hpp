@@ -23,7 +23,7 @@
 #endif
 
 #ifndef _FLEXCL_OPENGL_SUPPORT_
-#define _FLEXCL_OPENGL_SUPPORT_ 1
+#define _FLEXCL_OPENGL_SUPPORT_ 0
 #endif
 
 
