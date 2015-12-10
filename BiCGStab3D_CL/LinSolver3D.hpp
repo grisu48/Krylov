@@ -22,12 +22,11 @@ public:
 	Linsolver3D() {
 		this->dim=3;
 		this->debug=0;
-		this->my_type = 0;
+		this->my_type = -1;
 		this->rank = 0;
 	}
 	virtual ~Linsolver3D() {
-		// XXX: Check, if we really need this
-		my_type=-1;
+
 	}
 
 	/**
@@ -47,7 +46,15 @@ public:
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			double D_xx, double D_yy, double D_zz, int debug=0, double delt=0., bool evolve_time=false) = 0;
-	/** Solve with diffusion matrix without off-diagonal elements*/
+	/** Solve with diffusion matrix without off-diagonal elements
+	 * bounds - Boundary conditions
+	 *
+	 *
+	 *
+	 * phi - Solution vector
+	 * rhs - Right hand side
+	 * lambda -
+	 * */
 	virtual void solve(BoundaryHandler3D &bounds, NumMatrix<double,3> &phi,
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
@@ -61,12 +68,17 @@ public:
 			int debug=0, bool use_offDiagDiffusion=false,
 			double delt=0., bool evolve_time=false) = 0;
 
-	/** Set the advection matrix */
+	/** Set the advection matrix
+	 * ux - Velocity component
+	 * bounds - Boundary conditions, mostly used for MPI
+	 * dir - Direction (x=0, y=1, z=2)
+	 */
 	virtual void set_Advection(NumMatrix<double,3> &ux_fine,
 			BoundaryHandler3D &bounds, int dir) = 0;
 
 	/** Type of the solver
-	 *
+	 * Identifier for the solver
+	 * 20 - BiCGStab
 	 * */
 	int my_type;
 protected:
@@ -75,7 +87,10 @@ protected:
 			NumMatrix<double,3> &rhs, NumMatrix<double,3> &lambda,
 			NumMatrix<double,3> &Dxx, NumMatrix<double,3> &Dyy,
 			NumMatrix<double,3> &Dzz, NumMatrix<double,3> &Dxy, int debug=0) = 0;
-	// Internal grid storage routine
+
+	/**
+	 * Internal grid storage routine
+	 */
 	virtual void set_Grid(grid_1D &xGrid, grid_1D &yGrid, grid_1D &zGrid) = 0;
 #ifdef parallel
 	MPI_Comm comm3d;

@@ -28,9 +28,6 @@
 using namespace std;
 using namespace flexCL;
 
-// XXX: Remove me!
-#define TEST_CASE 0
-
 // Default size
 #define SIZE 32
 
@@ -60,6 +57,9 @@ static bool checkMatrix(NumMatrix<double,3>&);
 
 /** Random double float */
 static inline double randomf(double min = 0.0, double max = 1.0);
+
+/** Get a random seed */
+static long randomSeed(void);
 
 /* ==== MAIN PROGRAM FUNCTION ============================================== */
 
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
 			} else if(arg == "-r" || arg == "--random" || arg == "--randomize") {
 				randomize = true;
 				// Initialize random generator
-				time_t seed = time(NULL);
+				time_t seed = randomSeed();
 				cout << "\tInitialize random generator. Seed = " << seed << endl;
 				srand(seed);
 			} else {
@@ -584,4 +584,11 @@ static bool checkMatrix(NumMatrix<double,3> &matrix) {
 static double randomf(double min, double max) {
 	const double diff = max-min;
 	return min + (double)rand()/(double)(RAND_MAX/diff);
+}
+
+static long randomSeed(void) {
+	struct timespec spec;
+	clock_gettime(CLOCK_REALTIME, &spec);
+	return spec.tv_sec ^ spec.tv_nsec;
+
 }
