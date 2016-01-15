@@ -8,14 +8,15 @@
 #ifndef BICGSTAB_SOLVER_OPENCL_HPP_
 #define BICGSTAB_SOLVER_OPENCL_HPP_
 
+#include <exception>
+#include <string>
+#include <vector>
 
 #include "LinSolver3D.hpp"
 #include "grid_manager.H"
 #include "FlexCL.hpp"
 #include "FlexCLMatrix.hpp"
 
-#include <exception>
-#include <string>
 
 #if COMPARE_SOLVER == 1
 #include "solveLin_BICGStab.H"
@@ -56,7 +57,7 @@ protected:
 	/** Grid manager, not used any more */
 	grid_manager *grid;
 
-	/** Status code of the current solver*/
+	/** Status code of the current solver */
 	int status = 0;
 
 	/** Numerical tolerance when the solver exits */
@@ -74,10 +75,12 @@ protected:
 	/** Maximum number of iterations or 0, if no limit exists */
 	long _maxIterations = 0;
 
+	/** Dimension of the problem */
 	size_t mx[3];
+	/** dx values for each dimension */
 	double deltaX[3];
 
-	// XXX: Used from old solver. Either document it or remove it!
+	// XXX: Used from old solver. Internal matrix status flags
 	bool use_spatialDiffusion;
 	bool use_offDiagDiffusion;
 	int debug;
@@ -85,8 +88,13 @@ protected:
 	/** Diffusion diagonals (D_xx, D_yy, D_zz) */
 	double diffDiag[3];
 
+	/** Minimum step time */
 	long _steptime_min;
+	/** Maximum step time */
 	long _steptime_max;
+
+	/** Step times */
+	std::vector<long> stepTimes;
 
 
 	/* ==== OpenCL variables ==== */
@@ -128,6 +136,13 @@ public:
 
 	void setVerbose(bool);
 	long iterations(void);
+
+	/** Get the iteration runtimes of all steps */
+	std::vector<long> stepRuntimes(void);
+	/** Get the iteration runtimes of all steps
+	 * @param vector vector where the runtimes are written to
+	 * */
+	void stepRuntimes(std::vector<long> &vector);
 
 
 	/**

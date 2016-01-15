@@ -2,14 +2,15 @@
 # This is the path where your AMD OpenCL SDK is located
 #AMDSDK_PATH=/opt/AMDAPPSDK-3.0
 # Choose the path that matches you. The follwoing lines are some examples:
-AMDSDK_PATH=/opt/AMDAPP
+#AMDSDK_PATH=/opt/AMDAPP
 #AMDSDK_PATH=/opt/intel-opencl-sdk
 #AMDSDK_PATH=/opt/AMDAPPSDK
 #AMDSDK_PATH=/opt/AMDAPP
+AMDSDK_PATH=/usr/local/cuda
 
 # ==== COMPILER FLAGS ==== #
 #O_FLAGS=-Wall -Wextra -pedantic -g -O0
-O_FLAGS=-Wall -Wextra -pedantic -O3
+O_FLAGS=-Wall -Wextra -pedantic -O3 -g
 CXX=g++
 CXX_FLAGS=$(O_FLAGS) -std=c++11
 

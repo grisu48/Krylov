@@ -46,7 +46,9 @@ using namespace flexCL;
 #endif
 
 // Tolerance for numerical operations
+#ifndef epsilon
 #define epsilon 1e-3
+#endif
 // Number of ghost cells
 #define RIM 1
 
@@ -55,7 +57,9 @@ using namespace std;
 using namespace flexCL;
 
 // Maximum number of iterations before the solver quits or negative number, if this check should be disabled
+#ifndef MAX_ITERATIONS
 #define MAX_ITERATIONS 1000L
+#endif
 
 // Equal comparison for two floating point values
 #define REAL_EQUAL(x,y) { fabs(x-y)<epsilon*(y/x) }
@@ -65,6 +69,7 @@ using namespace flexCL;
 #define MARK_USED(x) (void)(x);
 
 /* ==== DEBUGGING ACTIONS ====================================================================== */
+
 
 // Some random hash function for the matrix
 #if VERBOSE == 1 || TESTING == 1
@@ -807,6 +812,19 @@ bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d *matrix) {
 long BiCGStabSolver::iterations(void) { return this->_iterations; }
 long BiCGStabSolver::steptimeMin(void) { return this->_steptime_min; }
 long BiCGStabSolver::steptimeMax(void) { return this->_steptime_max; }
+std::vector<long> BiCGStabSolver::stepRuntimes(void) {
+	// Copy vector to make sure the user does not do any nastry stuff
+	vector<long> result(this->stepTimes);
+	return result;
+}
+
+void BiCGStabSolver::stepRuntimes(std::vector<long> &vector) {
+	const int size = this->stepTimes.size();
+	for(int i=0;i<size;i++) {
+		const long value = this->stepTimes[i];
+		vector.push_back(value);
+	}
+}
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
 	this->generateAx(phi, residual, lambda, Dxx, Dyy, Dzz, Dxy);
@@ -860,6 +878,7 @@ void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLM
 #endif
 }
 
+// Solver internal
 void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		NumMatrix<double,3> &phi,
 		NumMatrix<double,3> &rhs,
@@ -1025,6 +1044,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		cl_resTilde->copyFrom(this->_matrix_residuals[0]);
 
 		COUT << "<resTilde,resTilde> = " << cl_resTilde->dotProduct() << endl;
+		this->stepTimes.clear();
 
 		long runtime = -time_ms();
 		bool initialStep = true;
@@ -1033,11 +1053,11 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 			if(this->_maxIterations > 0 && (long)iterations > this->_maxIterations)
 				throw NumException("Maximum iterations reached");
 
-
 			iterations++;
 			if(this->verbose) {
 				if(iterations > 1) {
 					runtime += time_ms();
+					this->stepTimes.push_back(runtime);
 					cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
 					if(initialStep) {
 						initialStep = false;

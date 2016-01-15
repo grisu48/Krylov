@@ -13,11 +13,14 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <algorithm>
+
 #include <cstdlib>
 #include <cmath>
 #include <ctime>
 #include <unistd.h>
 #include <signal.h>
+
 #include "LinSolver3D.hpp"
 #include "BiCGStabCL.hpp"
 #include "FlexCL.hpp"
@@ -60,6 +63,15 @@ static inline double randomf(double min = 0.0, double max = 1.0);
 
 /** Get a random seed */
 static long randomSeed(void);
+
+/** Arithmetic average */
+static double average(const vector<long> &values);
+
+/** Calculate geometric average */
+static double geometric_average(const std::vector<long> &values);
+
+/** Calculate standart deviation */
+static double stdev(const std::vector<long> &values);
 
 /* ==== MAIN PROGRAM FUNCTION ============================================== */
 
@@ -136,11 +148,17 @@ int main(int argc, char** argv) {
 		case OCL_CONTEXT_GPU:
 			oclContext = openCl.createGPUContext();
 			break;
+		case OCL_CONTEXT_ACCL:
+			oclContext = openCl.createContext(CL_DEVICE_TYPE_ACCELERATOR);
+			break;
 		default:
 			oclContext = openCl.createContext();
 			break;
 		}
-		if(oclContext == NULL) throw OpenCLException("No OpenCL device");
+		if(oclContext == NULL) {
+			cerr << "OpenCL context intialisation failed: No such device found" << endl;
+			return EXIT_FAILURE;
+		}
 
 		DeviceInfo oclDevice = oclContext->device_info();
 		cout << "OpenCL context initialized on device " <<oclDevice.device_id() << ": " << oclDevice.vendor() << " " << oclDevice.name() << endl;
@@ -265,7 +283,7 @@ int main(int argc, char** argv) {
 								AVal*sqr(xVal)*zVal*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 					}
 					break;
-					case TEST_FOUR:
+					case TEST_FOUR:		// Test 4 (räumliche Diffusion)
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 						const double angle = atan2(yVal, xVal);
@@ -294,7 +312,7 @@ int main(int argc, char** argv) {
 
 					}
 					break;
-					case TEST_FIVE:		// Test 2 (räumliche Diffusion)
+					case TEST_FIVE:		// Test 5 (räumliche Diffusion)
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 						if(ix==mx[0] || iy==mx[1] || iz==mx[2]) {
@@ -453,23 +471,23 @@ int main(int argc, char** argv) {
 
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (NumException &e) {
 		cerr << "Numerical exception occurred: " << e.what() << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (const char *msg) {
 		cerr << "Exception thrown: " << msg << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (...) {
 		cerr << "Unknown exception thrown." << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	}
 	cout << "=======================================================" << endl << endl;
@@ -478,9 +496,14 @@ int main(int argc, char** argv) {
 	const long iterations = bicgsolver->iterations();
 	const long steptimeMin = bicgsolver->steptimeMin();
 	const long steptimeMax = bicgsolver->steptimeMax();
+
+
+	vector<long> runtimes;
+	bicgsolver->stepRuntimes(runtimes);
+
 	VERBOSE("Cleanup ... ");
-	DELETE(solver);
-	DELETE(oclContext);
+	delete solver;
+	delete oclContext;
 
 	// Statistics
 	runtime += time_ms();
@@ -496,8 +519,11 @@ int main(int argc, char** argv) {
 	if (verbose) {
 		cout << "\t  Minimum step time            : " << steptimeMin << " ms" << endl;
 		cout << "\t  Maximum step time            : " << steptimeMax << " ms" << endl;
-		double avg_runtime = (double)runtime / (double)iterations;
-		cout << "\t  Average step time            : " << avg_runtime << " ms/iterations" << endl;
+		const double avg_runtime = average(runtimes);
+		const double stdev_normal = stdev(runtimes);
+		const double avg_geometric = geometric_average(runtimes);
+		cout << "\t  Average time (arithmetic)    : " << avg_runtime << " +/-" << stdev_normal << " ms/iterations" << endl;
+		cout << "\t  Average time (geometric)     : " << avg_geometric << " ms/iterations" << endl;
 		cout << endl;
 		cout << "\tOpenCL setup time              : " << ocl_setup_time << " ms" << endl;
 		cout << "\tTotal initialisation time      : " << total_init_time << " ms" << endl;
@@ -591,4 +617,45 @@ static long randomSeed(void) {
 	clock_gettime(CLOCK_REALTIME, &spec);
 	return spec.tv_sec ^ spec.tv_nsec;
 
+}
+
+static double average(const vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+	vector<long> runtimes(values);
+
+	double avg = 0.0;
+	for(unsigned int i=0;i<size;i++)
+		avg += values[i];
+	avg /= size;
+
+	return avg;
+}
+
+static double geometric_average(const vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+
+	// Copy array, because we need them sorted
+	vector<long> runtimes(values);
+	std::sort(runtimes.begin(), runtimes.end());
+	return (double)runtimes[size/2];
+}
+
+static inline double sqr(double x) { return (x*x); }
+
+static double stdev(const std::vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+	vector<long> runtimes(values);
+
+	const double avg = average(values);
+	double value = 0.0;
+	for(unsigned int i=0;i<size;i++) {
+		const double current = values[i];
+		value += sqr(current - avg);
+	}
+	value /= (double)sqr(size);
+
+	return sqrt(value);
 }

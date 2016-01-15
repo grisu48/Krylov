@@ -142,12 +142,11 @@ void OpenCL::close() {
 	if(platform_ids != NULL) delete[] platform_ids;
 	platform_ids = NULL;
 
-
-	while(contexts.size() > 0) {
-		Context* context = contexts.at(0);
-		delete context;
-		removeFromVector(contexts, context);
-	}
+	// Close and delete all context instances
+	vector<Context*> contexts(this->contexts);
+	this->contexts.clear();
+	for(vector<Context*>::iterator it = contexts.begin(); it!= contexts.end(); ++it)
+		delete *it;
 }
 
 vector<PlatformInfo> OpenCL::get_platforms(void) {
@@ -477,34 +476,27 @@ void Context::close() {
 	// The cleaning sequence matters. Remember that the programs will do a cleanup as well
 	// removing their associated memory buffers. This MUST take place before removing the remaining
 	// memory objects
-	while(programs.size() > 0)
-		this->releaseProgram(programs.at(0));
+	size_t size = programs.size();
 
-	/*
-	for(vector<Program*>::iterator it = programs.begin(); it != programs.end(); ++it)
-		delete *it;
+	vector<Program*> programs(this->programs);
+	for(unsigned int i=0;i<size;i++)
+		delete programs[i];
 	programs.clear();
-	*/
 
 	// Clear shared OpenGL/OpenCL buffers
 #if _FLEXCL_OPENGL_SUPPORT_ == 1
-	/*for(vector<OpenGLBuffer*>::iterator it = openglBuffers.begin(); it != openglBuffers.end(); ++it) {
+	vector<OpenGLBuffer*> openglBuffers(this->openglBuffers);
+	for(vector<OpenGLBuffer*>::iterator it = openglBuffers.begin(); it != openglBuffers.end(); ++it) {
 		OpenGLBuffer *buffer = *it;
 		buffer->close();
 		delete buffer;
 	}
-	openglBuffers.clear(); */
-	while(openglBuffers.size() > 0)
-		this->releaseBuffer(openglBuffers.at(0));
+	openglBuffers.clear();
 #endif
 
-	/*
 	for(vector<cl_mem>::iterator it = buffers.begin(); it != buffers.end(); ++it)
 		clReleaseMemObject(*it);
 	buffers.clear();
-	*/
-	while(this->buffers.size() > 0)
-		this->releaseBuffer(this->buffers.at(0));
 
 	deleteCommandQueue();
 	if (context != NULL) clReleaseContext(context);
@@ -919,16 +911,19 @@ void Program::cleanup() {
 #if _FLEXCL_DEBUG_SWITCH_ == 1
 	cout << "OpenCL::Program::cleanup()" << endl;
 #endif
-	for(vector<Kernel*>::iterator it = kernels.begin(); it != kernels.end(); ++it) {
+	// Release kernels
+	vector<Kernel*> kernels(this->kernels);
+	this->kernels.clear();
+	for(vector<Kernel*>::iterator it = kernels.begin(); it != kernels.end(); ++it)
 		delete *it;
-	}
-	kernels.clear();
-	for(vector<cl_mem>::iterator it = program_buffers.begin(); it != program_buffers.end(); ++it) {
-		cl_mem mem = *it;
-		context->releaseBuffer(mem);
-	}
-	program_buffers.clear();
 
+	// Release program buffers
+	vector<cl_mem> program_buffers(this->program_buffers);
+	this->program_buffers.clear();
+	for(vector<cl_mem>::iterator it = program_buffers.begin(); it != program_buffers.end(); ++it)
+		context->releaseBuffer(*it);
+
+	// Release the program itself
 	if (program != NULL) clReleaseProgram(program);
 	program = NULL;
 }

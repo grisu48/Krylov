@@ -10,6 +10,7 @@
 #define OCL_CONTEXT_DEFAULT 0
 #define OCL_CONTEXT_CPU 1
 #define OCL_CONTEXT_GPU 2
+#define OCL_CONTEXT_ACCL 3
 
 
 /* Test cases */
