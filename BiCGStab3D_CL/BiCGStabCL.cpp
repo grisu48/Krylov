@@ -974,7 +974,7 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 #endif
 
 	this->_context->join();
-	cout << "Matrices transferred to host device " << endl;
+//	cout << "Matrices transferred to host device " << endl;
 
 #if BICGSTAB_SOLVER_ADDITIONAL_CHECKS == 1
 	if(!this->checkMatrix(cl_phi)) throw "Initial matrix check failed (phi)";
@@ -1014,8 +1014,8 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 		double normRhs = cl_rhs->l2Norm();
 		if(normRhs < 1e-9 || ::isnan(normRhs) || ::isinf(normRhs)) normRhs = 1.0;
 
-		cout << "  normRHS  = " << normRhs << endl;
 #if VERBOSE == 1
+		cout << "  normRHS  = " << normRhs << endl;
 		cout << "  Expected = " << get_l2Norm(rhs) << endl;
 #endif
 

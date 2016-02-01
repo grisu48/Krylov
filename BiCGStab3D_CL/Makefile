@@ -3,10 +3,10 @@
 #AMDSDK_PATH=/opt/AMDAPPSDK-3.0
 # Choose the path that matches you. The follwoing lines are some examples:
 #AMDSDK_PATH=/opt/AMDAPP
-#AMDSDK_PATH=/opt/intel-opencl-sdk
+AMDSDK_PATH=/opt/intel-opencl-sdk
 #AMDSDK_PATH=/opt/AMDAPPSDK
 #AMDSDK_PATH=/opt/AMDAPP
-AMDSDK_PATH=/usr/local/cuda
+#AMDSDK_PATH=/usr/local/cuda
 
 # ==== COMPILER FLAGS ==== #
 #O_FLAGS=-Wall -Wextra -pedantic -g -O0
