@@ -110,6 +110,8 @@ int main(int argc, char** argv) {
 				opencl_context = OCL_CONTEXT_GPU;
 			else if(arg == "--cpu")
 				opencl_context = OCL_CONTEXT_CPU;
+			else if(arg == "--acc" || arg == "--accelerator")
+				opencl_context = OCL_CONTEXT_ACCL;
 			else if(arg == "-n" || arg == "--np") {
 				if(isLast) throw "Missing argument: Problem size";
 				size = atoi(argv[++i]);
@@ -611,6 +613,8 @@ static void printHelp(string programName) {
 	cout << "    -n N --np N                   Set problem size to N" << endl;
 	cout << "         --cpu                    Use CPU context (OpenCL)" << endl;
 	cout << "         --gpu                    Use GPU context (OpenCL)" << endl;
+	cout << "         --acc                    Use accelerator context (OpenCL)" << endl;
+	cout << "         --accelerator            Use accelerator context (OpenCL)" << endl;
 	cout << "    -t   --test TEST              Set test case to TEST" << endl;
 	cout << "    -p   --tolerance TOL          Set tolerance to TOL" << endl;
 	cout << "    -r   --random                 Randomize matrix" << endl;
