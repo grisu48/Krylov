@@ -752,12 +752,14 @@ int main(int argc, char** argv) {
 		cout << "Benchmark run over " << iterations << " iterations." << endl;
 		cout << "  Benchmark factor = " << avg << " +/- " << err << endl;
 		cout << "  The benchmark factor is the CPU/OpenCL time. High factor means higher OpenCL performance" << endl;
-		cout << "  The CPU time is a single-core reference implementation" << endl;
+		cout << "  The CPU time is a single-core reference implementation" << endl << endl;
+		cout << "WARNING: This is a very poor benchmark tool, since the calculation are very deterministic, the CPU" << endl;
+		cout << "  will have a higher performance value than usual. Keep that in mind!" << endl;
 	}
 	
 	delete m1;
 	delete m2;
 
-	cout << "DonByee" << endl;
+	cout << "Bye" << endl;
 }
 
