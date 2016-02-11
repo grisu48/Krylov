@@ -82,7 +82,7 @@ static string mem_string(size_t size) {
 }
 
 static void printHelp(string progname = "matrix_cl") {
-	cout << "Matrix demo program, 2015 Felix Niederwanger" << endl << endl;
+	cout << "Matrix demo program, 2016 Felix Niederwanger" << endl << endl;
 	cout << "SYNPOSIS: " << progname << " [OPTIONS]" << endl;
 	cout << "OPTIONS:" << endl;
 	cout << "  -h   | --help           Print this help message" << endl;
@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
 			double maxNorm_cpu = matrix.maxNorm();
 			time += time_ms();
 
-			cout << "  Returned results: l2 = " << l2norm_cpu << ", max = " << maxNorm_cpu << " (within " << time << " ms)" << endl;
+			cout << "  Expected results: l2 = " << l2norm_cpu << ", max = " << maxNorm_cpu << " (within " << time << " ms)" << endl;
 
 			double delta = fabs(maxnorm - maxNorm_cpu);
 			double delta_relative = fabs(delta/::max(maxnorm, maxNorm_cpu));

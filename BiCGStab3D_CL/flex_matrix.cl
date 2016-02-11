@@ -120,7 +120,7 @@ __kernel void reduction_local_max( __global const REAL *dA, __local REAL *prods,
 		const int mask = 2*offset -1;
 		barrier(CLK_LOCAL_MEM_FENCE);
 		if((tnum&mask)==0)
-			prods[tnum] = max(prods[tnum], prods[tnum + offset]);
+			prods[tnum] = max(fabs(prods[tnum]), fabs(prods[tnum + offset]));
 	}
 	
 	// Done
