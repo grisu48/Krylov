@@ -31,6 +31,11 @@
 #define _FLEXCL_MATRIX_PROFILING_ 0
 #endif
 
+// Deep reduction (Reduction until only one element remains)
+#ifndef _FLEXCL_REDUCTION_DEEP_
+#define _FLEXCL_REDUCTION_DEEP_ 1
+#endif
+
 /* ==== STATIC CONFIGURATION ==== */
 
 #ifndef _FLEXCL_MATRIX_KERNEL_FILENAME
@@ -708,6 +713,20 @@ static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t
 
 		context->join();
 
+
+
+#if _FLEXCL_REDUCTION_DEEP_ == 1
+		double result;
+		if(numWorkGroups <= 1) {
+			context->readBuffer(result_buf, sizeof(double), &result, true);
+			context->releaseBuffer(result_buf);
+		} else {
+			// Recursive run
+			result = reduction(context, kernel, maxWorkingGroupSize, localMemorySize, result_buf, numWorkGroups, 0, resultMode);
+			context->releaseBuffer(result_buf);
+		}
+		return result;
+#else
 		// Result readout, do not forget to release buffer!
 		double *result_buffer = new double[numWorkGroups];
 		context->readBuffer(result_buf, sizeof(double)*numWorkGroups, result_buffer, true);
@@ -734,11 +753,14 @@ static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t
 				break;
 		}
 		delete[] result_buffer;
+
+
 #if _FLEXCL_MATRIX_PROFILING_ == 1
 		profiling_time += time_ms();
 		cerr << "Reduction rest calculation took " << profiling_time << " ms" << endl;
 #endif
 		return result;
+#endif
 
 	} catch(...) {
 		// Clean exception handling: Release OpenCL buffer

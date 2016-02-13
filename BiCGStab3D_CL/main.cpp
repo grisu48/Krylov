@@ -20,6 +20,7 @@
 #include <ctime>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 #include "LinSolver3D.hpp"
 #include "BiCGStabCL.hpp"
