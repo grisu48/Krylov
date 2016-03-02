@@ -588,7 +588,7 @@ int main(int argc, char** argv) {
 			const char sep = '\t';
 			cout << test << sep << size << sep << iterations << sep << runtime << sep << calc_runtime <<
 				sep << steptimeMin << sep << steptimeMax << sep <<
-				avg_runtime << sep << avg_geometric << sep << tolerance << l2err << sep << max_error << endl;
+				avg_runtime << sep << avg_geometric << sep << tolerance << sep << l2err << sep << max_error << endl;
 		} else {
 			// Default mode
 			cout << "\tCalculation time: " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
@@ -596,8 +596,8 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	// Goodbye :-)
-	cout << "Bye" << endl;
+	// Goodbye, only if not in stats mode
+	if (mode != RUN_STATS) cout << "Bye" << endl;
 	return EXIT_SUCCESS;
 }
 
