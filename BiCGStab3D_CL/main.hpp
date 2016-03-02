@@ -10,6 +10,7 @@
 #define OCL_CONTEXT_DEFAULT 0
 #define OCL_CONTEXT_CPU 1
 #define OCL_CONTEXT_GPU 2
+#define OCL_CONTEXT_ACCL 3
 
 
 /* Test cases */
@@ -18,6 +19,10 @@
 #define TEST_THREE 3
 #define TEST_FOUR 4
 #define TEST_FIVE 5
+
+/* Run modi */
+#define RUN_NORMAL 0x1			// Normal run
+#define RUN_STATS 0x2			// Statistic run (limited but normalized output)
 
 
 #endif /* MAIN_HPP_ */

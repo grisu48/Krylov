@@ -13,11 +13,15 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <algorithm>
+
 #include <cstdlib>
 #include <cmath>
 #include <ctime>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
+
 #include "LinSolver3D.hpp"
 #include "BiCGStabCL.hpp"
 #include "FlexCL.hpp"
@@ -61,20 +65,33 @@ static inline double randomf(double min = 0.0, double max = 1.0);
 /** Get a random seed */
 static long randomSeed(void);
 
+/** Arithmetic average */
+static double average(const vector<long> &values);
+
+/** Calculate geometric average */
+static double geometric_average(const std::vector<long> &values);
+
+/** Calculate standart deviation */
+static double stdev(const std::vector<long> &values);
+
 /* ==== MAIN PROGRAM FUNCTION ============================================== */
 
 int main(int argc, char** argv) {
-	cout << " -- BiCGStab 3D Linear solver (OpenCL) --" << endl;
 	signal(SIGINT, sig_handler);
 	signal(SIGUSR1, sig_handler);
 	signal(SIGTERM, sig_handler);
 	//signal(SIGSEGV, sig_handler);
-
+	
+	// Program variables
+	int mode = RUN_NORMAL;
+	
 	// Runtime variables
-	long ocl_setup_time;
-	long total_init_time;
-	long problem_init_time;
-	long solver_setup_time;
+	long ocl_setup_time = 0;
+	long total_init_time = 0;
+	long problem_init_time = 0;
+	long solver_setup_time = 0;
+	double max_error = -1.0;
+	double l2err = 0.0;
 
 
 	/* ====== Problem variable declaration ====== */
@@ -94,6 +111,8 @@ int main(int argc, char** argv) {
 				opencl_context = OCL_CONTEXT_GPU;
 			else if(arg == "--cpu")
 				opencl_context = OCL_CONTEXT_CPU;
+			else if(arg == "--acc" || arg == "--accelerator")
+				opencl_context = OCL_CONTEXT_ACCL;
 			else if(arg == "-n" || arg == "--np") {
 				if(isLast) throw "Missing argument: Problem size";
 				size = atoi(argv[++i]);
@@ -111,6 +130,8 @@ int main(int argc, char** argv) {
 				time_t seed = randomSeed();
 				cout << "\tInitialize random generator. Seed = " << seed << endl;
 				srand(seed);
+			} else if(arg == "-s" || arg == "--stats" || arg == "--statistical") {
+				mode = RUN_STATS;
 			} else {
 				cerr << "Illegal argument: " << arg << "." << endl;
 				cerr << "  Type " << argv[0] << " --help if you need help" << endl;
@@ -121,6 +142,10 @@ int main(int argc, char** argv) {
 			return EXIT_FAILURE;
 		}
 	}
+
+
+	if((mode & RUN_NORMAL) != 0)
+		cout << " -- BiCGStab 3D Linear solver (OpenCL) --" << endl;
 
 	/* ==== OpenCL Initialisation ========================================== */
 	ocl_setup_time = -time_ms();
@@ -136,14 +161,21 @@ int main(int argc, char** argv) {
 		case OCL_CONTEXT_GPU:
 			oclContext = openCl.createGPUContext();
 			break;
+		case OCL_CONTEXT_ACCL:
+			oclContext = openCl.createContext(CL_DEVICE_TYPE_ACCELERATOR);
+			break;
 		default:
 			oclContext = openCl.createContext();
 			break;
 		}
-		if(oclContext == NULL) throw OpenCLException("No OpenCL device");
+		if(oclContext == NULL) {
+			cerr << "OpenCL context intialisation failed: No such device found" << endl;
+			return EXIT_FAILURE;
+		}
 
 		DeviceInfo oclDevice = oclContext->device_info();
-		cout << "OpenCL context initialized on device " <<oclDevice.device_id() << ": " << oclDevice.vendor() << " " << oclDevice.name() << endl;
+		if((mode & RUN_NORMAL) != 0)
+			cout << "OpenCL context initialized on device " <<oclDevice.device_id() << ": " << oclDevice.vendor() << " " << oclDevice.name() << endl;
 
 	} catch (OpenCLException &e) {
 		cerr << "Error setting up OpenCL context: " << e.what() << endl;
@@ -210,10 +242,12 @@ int main(int argc, char** argv) {
 		// Randomize
 		if(randomize) {
 			lambda_factor = randomf(0.1, 100.0);
-			cout << "\tRandom lambda factor = " << lambda_factor << endl;
+			if((mode & RUN_NORMAL) != 0)
+				cout << "\tRandom lambda factor = " << lambda_factor << endl;
 			for(int i=0;i<4;i++){
 				diffTensFactor[i] = randomf(0.1,10.0);
-				cout << "\tRandom diffTens[" << i << "] = " << diffTensFactor[i] << endl;
+				if((mode & RUN_NORMAL) != 0)
+					cout << "\tRandom diffTens[" << i << "] = " << diffTensFactor[i] << endl;
 			}
 		} else {
 			lambda_factor = 0.2;
@@ -265,7 +299,7 @@ int main(int argc, char** argv) {
 								AVal*sqr(xVal)*zVal*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 					}
 					break;
-					case TEST_FOUR:
+					case TEST_FOUR:		// Test 4 (räumliche Diffusion)
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 						const double angle = atan2(yVal, xVal);
@@ -294,7 +328,7 @@ int main(int argc, char** argv) {
 
 					}
 					break;
-					case TEST_FIVE:		// Test 2 (räumliche Diffusion)
+					case TEST_FIVE:		// Test 5 (räumliche Diffusion)
 					{
 						phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 						if(ix==mx[0] || iy==mx[1] || iz==mx[2]) {
@@ -347,7 +381,8 @@ int main(int argc, char** argv) {
 		} else
 			if(!checkMatrix(rhs)) throw "Matrix rhs";
 
-		cout << "  Pre-run checks completed." << endl;
+		if((mode & RUN_NORMAL) != 0)
+			cout << "  Pre-run checks completed." << endl;
 
 	} catch (const char* msg) {
 		cerr << "Pre-run check of the matrices failed: " << msg << endl;
@@ -379,19 +414,22 @@ int main(int argc, char** argv) {
 	VERBOSE("Problem setup complete.");
 	total_init_time += time_ms();
 	long calc_runtime = -time_ms();
-	cout << endl << "=======================================================" << endl;
-	cout << "  Running calculation ... " << endl;
+	if((mode & RUN_NORMAL) != 0) {
+		cout << endl << "=======================================================" << endl;
+		cout << "  Running calculation ... " << endl;
+	}
 
+	
 	try {
 
 		if(testSwitch == TEST_ONE) {
-			if(verbose) cout << "Solving with diagonal diffusion matrix ... " << endl;
+			VERBOSE("Solving with diagonal diffusion matrix ... ");
 			solver->solve(boundaries, phi, rhs, lambda, diff[0], diff[1], diff[2], 8);
 		} else if (testSwitch == TEST_TWO || testSwitch == TEST_FIVE) {
-			if(verbose) cout << "Solving with arbitrary diffusion matrix ... " << endl;
+			VERBOSE("Solving with arbitrary diffusion matrix ... ");
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8);
 		} else if(testSwitch == TEST_THREE || testSwitch == TEST_FOUR) {
-			if(verbose) cout << "Solving with arbitrary diffusion matrix with off-diagonal elements ... " << endl;
+			VERBOSE("Solving with arbitrary diffusion matrix with off-diagonal elements ... ");
 			solver->solve(boundaries, phi, rhs, lambda, diffTens[0], diffTens[1], diffTens[2], diffTens[3], 8, true);
 		} else {
 			cerr << "UNKNOWN TEST SWITCH: " << testSwitch << endl;
@@ -400,7 +438,9 @@ int main(int argc, char** argv) {
 
 
 		calc_runtime += time_ms();
-		cout << "  Computation complete. Calculation time: " << calc_runtime << " ms" << endl;
+		
+		if((mode & RUN_NORMAL) != 0)
+			cout << "  Computation complete. Calculation time: " << calc_runtime << " ms" << endl;
 
 		/* ==== Error estimate ================================================= */
 		//const double coeff[3] = {1.0/sqr(dx),1.0/sqr(dy),1.0/sqr(dz)};
@@ -414,8 +454,9 @@ int main(int argc, char** argv) {
 				}
 			}
 		}
-		double l2err = sqrt(error/num);
-		cout << " l2 error: " << l2err << "  (" << error << "/" << num << ")" << endl;
+		l2err = sqrt(error/num);
+		if((mode & RUN_NORMAL) != 0)
+			cout << " l2 error: " << l2err << "  (" << error << "/" << num << ")" << endl;
 
 		// Detailed look at solution
 		// Now let's have a look:
@@ -437,8 +478,6 @@ int main(int argc, char** argv) {
 #endif
 
 		// Search for maximum error
-		double max_error = -1.0;
-
 		for(size_t iz = 0; iz <= mx[2]; ++iz) {
 			for(size_t iy = 0; iy <= mx[1]; ++iy) {
 				for(size_t ix = 0; ix <= mx[0]; ++ix) {
@@ -449,55 +488,63 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		cout << "Maximum error found on grid: " << max_error << endl;
+		if((mode & RUN_NORMAL) != 0)
+			cout << "Maximum error found on grid: " << max_error << endl;
 
 	} catch (OpenCLException &e) {
 		cerr << "OpenCL exception thrown: " << e.what() << " - " << e.opencl_error_string() << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (NumException &e) {
 		cerr << "Numerical exception occurred: " << e.what() << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (const char *msg) {
 		cerr << "Exception thrown: " << msg << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	} catch (...) {
 		cerr << "Unknown exception thrown." << endl;
-		DELETE(solver);
-		DELETE(oclContext);
+		delete solver;
+		delete oclContext;
 		return EXIT_FAILURE;
 	}
-	cout << "=======================================================" << endl << endl;
+	if((mode & RUN_NORMAL) != 0)
+		cout << "=======================================================" << endl << endl;
 
 	/* ==== CLEANUP ======================================================== */
 	const long iterations = bicgsolver->iterations();
 	const long steptimeMin = bicgsolver->steptimeMin();
 	const long steptimeMax = bicgsolver->steptimeMax();
+
+
+	vector<long> runtimes;
+	bicgsolver->stepRuntimes(runtimes);
+
 	VERBOSE("Cleanup ... ");
-	DELETE(solver);
-	DELETE(oclContext);
+	delete solver;
+	delete oclContext;
 
 	// Statistics
 	runtime += time_ms();
 
+	const double avg_runtime = average(runtimes);
+	const double stdev_normal = stdev(runtimes);
+	const double avg_geometric = geometric_average(runtimes);
+	
+		
 	if(verbose) {
 		cout << " ==== Time statistics ==== " << endl;
 		cout << "\tCalculation time               : " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
 		cout << "\tTotal runtime                  : " << runtime << " ms" << endl;
-	} else {
-		cout << "\tCalculation time: " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
-		cout << "\tTotal runtime:    " << runtime << " ms" << endl;
-	}
-	if (verbose) {
+		
 		cout << "\t  Minimum step time            : " << steptimeMin << " ms" << endl;
 		cout << "\t  Maximum step time            : " << steptimeMax << " ms" << endl;
-		double avg_runtime = (double)runtime / (double)iterations;
-		cout << "\t  Average step time            : " << avg_runtime << " ms/iterations" << endl;
+		cout << "\t  Average time (arithmetic)    : " << avg_runtime << " +/-" << stdev_normal << " ms/iterations" << endl;
+		cout << "\t  Average time (geometric)     : " << avg_geometric << " ms/iterations" << endl;
 		cout << endl;
 		cout << "\tOpenCL setup time              : " << ocl_setup_time << " ms" << endl;
 		cout << "\tTotal initialisation time      : " << total_init_time << " ms" << endl;
@@ -513,6 +560,39 @@ int main(int argc, char** argv) {
 			cout <<"\tLambda factor: " << lambda_factor << endl;
 			for(int i=0;i<4;i++)
 				cout << "\tdiffTensFactor[" << i << "] = " << diffTensFactor[i] << endl;
+		}
+	} else {
+	
+		if (mode == RUN_STATS) {
+			cout << "# Test\tSize\tIterations\tTotal runtime\tCalculation time\tMin step time\tMax step time\tAverage (arithmetic)\tAverage (geometric)\tTolerance\tL2 error\tMax error" << endl;
+			
+			int test = 0;
+			switch(testSwitch) {
+			case TEST_ONE:
+				test = 1;
+				break;
+			case TEST_TWO:
+				test = 2;
+				break;
+			case TEST_THREE:
+				test = 3;
+				break;
+			case TEST_FOUR:
+				test = 4;
+				break;
+			case TEST_FIVE:
+				test = 5;
+				break;
+			}
+			
+			const char sep = '\t';
+			cout << test << sep << size << sep << iterations << sep << runtime << sep << calc_runtime <<
+				sep << steptimeMin << sep << steptimeMax << sep <<
+				avg_runtime << sep << avg_geometric << sep << tolerance << l2err << sep << max_error << endl;
+		} else {
+			// Default mode
+			cout << "\tCalculation time: " << calc_runtime << " ms (" << iterations << " iterations)" << endl;
+			cout << "\tTotal runtime:    " << runtime << " ms" << endl;
 		}
 	}
 
@@ -534,9 +614,12 @@ static void printHelp(string programName) {
 	cout << "    -n N --np N                   Set problem size to N" << endl;
 	cout << "         --cpu                    Use CPU context (OpenCL)" << endl;
 	cout << "         --gpu                    Use GPU context (OpenCL)" << endl;
+	cout << "         --acc                    Use accelerator context (OpenCL)" << endl;
+	cout << "         --accelerator            Use accelerator context (OpenCL)" << endl;
 	cout << "    -t   --test TEST              Set test case to TEST" << endl;
 	cout << "    -p   --tolerance TOL          Set tolerance to TOL" << endl;
 	cout << "    -r   --random                 Randomize matrix" << endl;
+	cout << "    -s   --stats                  Statistical output (less than normal but normalized as CSV)" << endl;
 }
 
 
@@ -591,4 +674,45 @@ static long randomSeed(void) {
 	clock_gettime(CLOCK_REALTIME, &spec);
 	return spec.tv_sec ^ spec.tv_nsec;
 
+}
+
+static double average(const vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+	vector<long> runtimes(values);
+
+	double avg = 0.0;
+	for(unsigned int i=0;i<size;i++)
+		avg += values[i];
+	avg /= size;
+
+	return avg;
+}
+
+static double geometric_average(const vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+
+	// Copy array, because we need them sorted
+	vector<long> runtimes(values);
+	std::sort(runtimes.begin(), runtimes.end());
+	return (double)runtimes[size/2];
+}
+
+static inline double sqr(double x) { return (x*x); }
+
+static double stdev(const std::vector<long> &values) {
+	const size_t size = values.size();
+	if(size == 0) return 0.0;
+	vector<long> runtimes(values);
+
+	const double avg = average(values);
+	double value = 0.0;
+	for(unsigned int i=0;i<size;i++) {
+		const double current = values[i];
+		value += sqr(current - avg);
+	}
+	value /= (double)sqr(size);
+
+	return sqrt(value);
 }

@@ -31,6 +31,11 @@
 #define _FLEXCL_MATRIX_PROFILING_ 0
 #endif
 
+// Deep reduction (Reduction until only one element remains)
+#ifndef _FLEXCL_REDUCTION_DEEP_
+#define _FLEXCL_REDUCTION_DEEP_ 1
+#endif
+
 /* ==== STATIC CONFIGURATION ==== */
 
 #ifndef _FLEXCL_MATRIX_KERNEL_FILENAME
@@ -396,17 +401,17 @@ double Matrix3d::dotProduct(Matrix3d *matrix, bool includeRim) {
 }
 
 double Matrix3d::maxNorm(bool includeRim) {
-	double result = 0.0;
+	double result = fabs(this->data[0]);
 	if(includeRim) {
 		size_t size = this->sizeTotal();
 		for(size_t i=0;i<size;i++)
-			result = ::max(result, this->data[i]);
+			result = ::max(result, fabs(this->data[i]));
 	} else {
 		for(size_t ix=0;ix<_mx[0];ix++)
 			for(size_t iy=0;iy<_mx[1];iy++)
 				for(size_t iz=0;iz<_mx[2];iz++) {
 					const int i = this->index(ix,iy,iz);
-					result = ::max(result, this->data[i]);
+					result = ::max(result, fabs(this->data[i]));
 				}
 	}
 
@@ -635,7 +640,23 @@ void CLMatrix_d::setConstantValue(double value) {
 	clArraySet(this->_mem, this->sizeTotal(), 0, value);
 }
 
-static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t maxWorkingGroupSize, size_t localMemorySize, cl_mem buffer, size_t size, size_t offset) {
+
+/**
+  * Performs a reduction with the given reduction kernel
+  * @param context OpenCL context
+  * @param kernel Reduction kernel
+  * @param maxWorkingGroupSize maximum size of one working group, before splitting
+  * @param localMemorySize Local memory size
+  * @param buffer OpenCL buffer where the reduction is applied
+  * @param size Size of the buffer
+  * @param offset Offset on the buffer, if any
+  * @param resultMode What happens with the final result array. 0 = sum it up, 1 = max
+  */
+static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t maxWorkingGroupSize, size_t localMemorySize, cl_mem buffer, size_t size, size_t offset, int resultMode = 0) {
+	// Check parameters
+	if(resultMode < 0 || resultMode > 1)
+		throw OpenCLException("Illegal resultMode in Reduction");
+	
 #if _FLEXCL_MATRIX_PROFILING_ == 1
 	unsigned long profiling_time = -time_ms();
 #endif
@@ -692,21 +713,20 @@ static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t
 
 		context->join();
 
-		// Old relict of performance testing
-#if 0
-		long runtime = _kern_Reduction_Local->runtime() / 1e3;
-		static long min_runtime = runtime;
-		static long max_runtime = runtime;
-		static long avg_runtime = runtime;
-		static long counter = 0;
-		min_runtime = ::min(min_runtime, runtime);
-		max_runtime = ::max(max_runtime, runtime);
-		avg_runtime = (0.95*runtime) + (0.05 * avg_runtime);
-		counter++;
-		cerr << "reduction " << counter << " within " << runtime << " µs (min = " << min_runtime << ", max = " << max_runtime << ", avg = " << avg_runtime << ") for " << size << " elements" << endl;
-#endif
 
 
+#if _FLEXCL_REDUCTION_DEEP_ == 1
+		double result;
+		if(numWorkGroups <= 1) {
+			context->readBuffer(result_buf, sizeof(double), &result, true);
+			context->releaseBuffer(result_buf);
+		} else {
+			// Recursive run
+			result = reduction(context, kernel, maxWorkingGroupSize, localMemorySize, result_buf, numWorkGroups, 0, resultMode);
+			context->releaseBuffer(result_buf);
+		}
+		return result;
+#else
 		// Result readout, do not forget to release buffer!
 		double *result_buffer = new double[numWorkGroups];
 		context->readBuffer(result_buf, sizeof(double)*numWorkGroups, result_buffer, true);
@@ -720,15 +740,27 @@ static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t
 		cerr << "Reduction(" << buffer << "," << size << "," << offset << ")  --  " << runtime << " ms (CPU time: " << profiling_time << " ms)" << endl;
 		profiling_time = -time_ms();
 #endif
-		double result = 0.0;
-		for(size_t i=0;i<numWorkGroups;i++)
-			result += result_buffer[i];
+		double result = result_buffer[0];
+		switch(resultMode) {
+			case 0:			// Sum it up
+				for(size_t i=1;i<numWorkGroups;i++)
+					result += result_buffer[i];
+				break;
+			case 1:			// Get max element
+				result = result_buffer[0];
+				for(size_t i=1;i<numWorkGroups;i++)
+					result = max(result, result_buffer[i]);
+				break;
+		}
 		delete[] result_buffer;
+
+
 #if _FLEXCL_MATRIX_PROFILING_ == 1
 		profiling_time += time_ms();
 		cerr << "Reduction rest calculation took " << profiling_time << " ms" << endl;
 #endif
 		return result;
+#endif
 
 	} catch(...) {
 		// Clean exception handling: Release OpenCL buffer
@@ -739,11 +771,11 @@ static double reduction(flexCL::Context *context, flexCL::Kernel *kernel, size_t
 
 
 double CLMatrix_d::reduction_double(cl_mem buffer, size_t size, size_t offset) {
-	return reduction(_context, this->_kern_Reduction_Local, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset);
+	return reduction(_context, this->_kern_Reduction_Local, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset, 0);
 }
 
 double CLMatrix_d::reduction_max_double(cl_mem buffer, size_t size, size_t offset) {
-	return reduction(_context, this->_kern_Reduction_Local_max, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset);
+	return reduction(_context, this->_kern_Reduction_Local_max, this->_maxWorkGroupSize, this->_localMemSize, buffer, size, offset, 1);
 }
 
 
@@ -1245,11 +1277,15 @@ long CLMatrix3d::lastKernelRuntime(void) {
 
 double CLMatrix3d::maxNorm(bool includeRim) {
 	// Copy memory
-	size_t size = this->sizeTotal();
+	const size_t size = this->sizeTotal();
 	cl_mem buffer = _context->createBuffer(sizeof(double)*size);
 	_context->copyBuffer(buffer, this->_mem, sizeof(double)*size);
+	// Make it absolute and exclude the rim
 	clArrayAbs(buffer, size);
-	double result = reduction_max_double(buffer, size);
+	if (!includeRim) setRim(buffer, 0.0);
+	// Determine maximum via reduction
+	const double result = reduction_max_double(buffer, size);
+	
 	_context->releaseBuffer(buffer);
 	return result;
 }

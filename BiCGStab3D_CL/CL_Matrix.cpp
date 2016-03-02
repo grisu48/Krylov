@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -81,8 +82,41 @@ static string mem_string(size_t size) {
 	return result.str();
 }
 
+/**
+  * Create average from double vector
+  */
+static double average(vector<double> &vec) {
+	const size_t size = vec.size();
+	if(size == 0) return 0.0;
+	
+	double result = 0.0;
+	for(vector<double>::iterator it = vec.begin(); it!=vec.end(); ++it)
+		result += *it;
+	result /= (double)size;
+	return result;
+}
+
+static double sqr(double x) { return (x*x); }
+
+/**
+  * Create standart deviation from double vector
+  */
+static double stdev(vector<double> &vec) {
+	const size_t size = vec.size();
+	if(size == 0) return 0.0;
+	
+	double result = 0.0;
+	const double avg = average(vec);
+	for( vector<double>::iterator it = vec.begin(); it!=vec.end(); ++it)
+		result += sqr(*it - avg);
+	result /= sqr(size);
+	return result;
+}
+
+
+
 static void printHelp(string progname = "matrix_cl") {
-	cout << "Matrix demo program, 2015 Felix Niederwanger" << endl << endl;
+	cout << "Matrix demo program, 2016 Felix Niederwanger" << endl << endl;
 	cout << "SYNPOSIS: " << progname << " [OPTIONS]" << endl;
 	cout << "OPTIONS:" << endl;
 	cout << "  -h   | --help           Print this help message" << endl;
@@ -295,6 +329,7 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
+	vector<double> benchmarkFactors;
 	try {
 		context->join();
 		// Transfer data (just for benchmarking)
@@ -396,7 +431,7 @@ int main(int argc, char** argv) {
 			double maxNorm_cpu = matrix.maxNorm();
 			time += time_ms();
 
-			cout << "  Returned results: l2 = " << l2norm_cpu << ", max = " << maxNorm_cpu << " (within " << time << " ms)" << endl;
+			cout << "  Expected results: l2 = " << l2norm_cpu << ", max = " << maxNorm_cpu << " (within " << time << " ms)" << endl;
 
 			double delta = fabs(maxnorm - maxNorm_cpu);
 			double delta_relative = fabs(delta/::max(maxnorm, maxNorm_cpu));
@@ -426,6 +461,11 @@ int main(int argc, char** argv) {
 		signal(SIGUSR2, sig_handler);
 
 		cout << endl << endl << SEPARATOR;
+		if(benchmark) {
+			cout << "  Info: The benchmark factor is the CPU/OpenCL time. Higher factor means higher performance" << endl;
+			cout << "        It is compared to a single-core reference implementation of the matrix operations" << endl;
+		}
+		
 		long remaining = iterations;
 		long iteration = 0;
 		double result[2];
@@ -613,6 +653,8 @@ int main(int argc, char** argv) {
 
 				// Test 8 -- This is actually a benchmark
 				float benchmark_factor = 0.0;
+				long cl_runtime;
+				long cpu_runtime;
 				if(benchmark) {
 					cout << status << " (Running benchmark - CL) ... " << lotsOfSpaces; cout.flush();
 					const int multiplications = 10;
@@ -621,7 +663,7 @@ int main(int argc, char** argv) {
 					// First, handle operations on the openCL device
 					m1->transferToDevice(test_matrix.raw(), true);
 					m2->transferToDevice(test_matrix.raw(), true);
-					long cl_runtime = -time_ms();
+					cl_runtime = -time_ms();
 					for(int ii=0;ii<additions;ii++) {
 						m1->add(m2);
 						for(int jj=0;jj<multiplications;jj++) {
@@ -638,7 +680,7 @@ int main(int argc, char** argv) {
 					cout << status << " (Running benchmark - CPU) ... " << lotsOfSpaces; cout.flush();
 					test1.copyFrom(test_matrix);
 					test2.copyFrom(test_matrix);
-					long cpu_runtime = -time_ms();
+					cpu_runtime = -time_ms();
 					for(int ii=0;ii<additions;ii++) {
 						test1.add(test2);
 						for(int jj=0;jj<multiplications;jj++) {
@@ -650,13 +692,14 @@ int main(int argc, char** argv) {
 						}
 					}
 					cpu_runtime += time_ms();
-					benchmark_factor = (float)(cpu_runtime) / (float)cl_runtime;
+					benchmark_factor = (float)(cpu_runtime) / (float)(cl_runtime);
+					benchmarkFactors.push_back(benchmark_factor);
 				}
 
 				// Done testing.
 				runtime += time_ms();
 				if(benchmark)
-					cout << status << " ... all tests passed (" << runtime << " ms, benchmark factor = " << benchmark_factor << ")";
+					cout << status << " ... all tests passed (" << runtime << " ms, CPU: " << cpu_runtime << " ms, OpenCL: " << cl_runtime << " ms; factor = " << benchmark_factor << ")";
 				else
 					cout << status << " ... all tests passed (" << runtime << " ms)";
 				cout << lotsOfSpaces << endl; cout.flush();
@@ -701,12 +744,22 @@ int main(int argc, char** argv) {
 		delete m2;
 		return EXIT_FAILURE;
 	}
-
-	cout << "Cleanup ... " << endl;
+	
+	if(benchmark) {
+		const double avg = average(benchmarkFactors);
+		const double err = stdev(benchmarkFactors);
+		
+		cout << "Benchmark run over " << iterations << " iterations." << endl;
+		cout << "  Benchmark factor = " << avg << " +/- " << err << endl;
+		cout << "  The benchmark factor is the CPU/OpenCL time. High factor means higher OpenCL performance" << endl;
+		cout << "  The CPU time is a single-core reference implementation" << endl << endl;
+		cout << "WARNING: This is a very poor benchmark tool, since the calculation are very deterministic, the CPU" << endl;
+		cout << "  will have a higher performance value than usual. Keep that in mind!" << endl;
+	}
+	
 	delete m1;
 	delete m2;
 
-
-	cout << "Done" << endl;
+	cout << "Bye" << endl;
 }
 

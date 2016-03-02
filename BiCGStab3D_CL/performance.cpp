@@ -28,6 +28,7 @@ using namespace flexCL;
 #define _DEV_TYPE_DEFAULT 0
 #define _DEV_TYPE_CPU 1
 #define _DEV_TYPE_GPU 2
+#define _DEV_TYPE_ACC 3
 
 
 
@@ -62,13 +63,14 @@ static string mem_string(size_t size) {
 }
 
 static void printHelp(string progname = "matrix_cl") {
-	cout << "Matrix performance measurement program, 2015 Felix Niederwanger" << endl << endl;
+	cout << "Matrix performance measurement program, 2016 Felix Niederwanger" << endl << endl;
 	cout << "SYNPOSIS: " << progname << " [OPTIONS]" << endl;
 	cout << "OPTIONS:" << endl;
 	cout << "  -h   | --help           Print this help message" << endl;
 	cout << "  -n N | --size N         Define size of the problem to be N^3" << endl;
 	cout << "         --gpu            Use GPU device context" << endl;
 	cout << "         --cpu            Use CPU device context" << endl;
+	cout << "         --acc            Use ACCELERATOR device context" << endl;
 	cout << "         --local N        Set local memory to N bytes" << endl;
 	cout << "         --rim N          Set number of RIM cells" << endl;
 	cout << "  -i N | --iterations N   Set the number of iterations" << endl;
@@ -114,7 +116,6 @@ int main(int argc, char** argv) {
 	double mutliplication_time[2];
 	double dot_product_itself_time[2];
 	double dot_product_foreign_time[2];
-	double dot_product_time;
 
 
 	srand(time(NULL));
@@ -134,6 +135,8 @@ int main(int argc, char** argv) {
 				type = _DEV_TYPE_GPU;
 			} else if(arg == "--cpu") {
 				type = _DEV_TYPE_CPU;
+			} else if(arg == "--acc" || arg == "--accelerator") {
+				type = _DEV_TYPE_ACC;
 			} else if(arg == "--local") {
 				if(isLast) throw "Missing argument: Local memory";
 				local_mem_size = (size_t)atol(argv[++i]);
@@ -165,6 +168,9 @@ int main(int argc, char** argv) {
 			break;
 		case _DEV_TYPE_GPU:
 			context = opencl.createGPUContext();
+			break;
+		case _DEV_TYPE_ACC:
+			context = opencl.createContext(CL_DEVICE_TYPE_ACCELERATOR);
 			break;
 		default:
 			context = opencl.createContext();
@@ -278,8 +284,9 @@ int main(int argc, char** argv) {
 	m1->transferToDevice(matrix, true);
 	m2->transferToDevice(matrix, true);
 	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
-	// Dot product
-	if(verbose) { cout << "Dot-Product ... "; cout.flush(); }
+	
+	// Dot products
+	if(verbose) { cout << "Dot-Product (itself) ... "; cout.flush(); }
 	context->join();
 	time = -time_ms();
 	runtime = 0L;
@@ -292,6 +299,12 @@ int main(int argc, char** argv) {
 	time += time_ms();
 	dot_product_itself_time[0] = runtime / 1e6;
 	dot_product_itself_time[1] = time;
+	m1->transferToDevice(matrix, true);
+	m2->transferToDevice(matrix, true);
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
+	
+	
+	if(verbose) { cout << "Dot-Product (foreign) ... "; cout.flush(); }
 	time = -time_ms();
 	runtime = 0L;
 	for(long i=0;i<iterations;i++) {
@@ -306,25 +319,10 @@ int main(int argc, char** argv) {
 	m2->transferToDevice(matrix, true);
 	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 
-	// Just for fun
-	if(verbose) { cout << "Dot-Product (vanilla)... "; cout.flush(); }
-	m1->setProfiling(false);
-	m2->setProfiling(false);
-	m1->transferToDevice(matrix, true);
-	m2->transferToDevice(matrix, true);
-	context->join();
-	runtime = -time_ms();
-	for(long i=0;i<iterations;i++)
-		m1->dotProduct();
-	context->join();
-	runtime +=time_ms();
-	dot_product_time = runtime;
-	if(verbose) { cout << runtime << " ms" << endl; cout.flush(); }
-
-
 
 	cout << SEPARATOR;
 	cout << "  --------RESULTS--------" << endl;
+	cout << "  The result are in ms per iteration" << endl;
 	cout << "                          :   PROFILE  | WALL CLOCK " << endl;
 	double index[2];
 	index[0] = 0.0;
@@ -341,13 +339,10 @@ int main(int argc, char** argv) {
 	cout << "    Multiplication        : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	index[0] = (double)dot_product_itself_time[0]/(double)iterations;
 	index[1] = (double)dot_product_itself_time[1]/(double)iterations;
-	cout << "  -- Performance indices -- " << endl;
 	cout << "    dotProduct (itself)   : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	index[0] = (double)dot_product_foreign_time[0]/(double)iterations;
 	index[1] = (double)dot_product_foreign_time[1]/(double)iterations;
 	cout << "    dotProduct (foreign)  : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
-	cout << "    dotProduct (vanilla)  : " << setw(10) << dot_product_time << " | " << setw(10) << ((double)dot_product_time/(double)iterations) << endl;
-	cout << "  -- lower index means better result -- " << endl;
 	cout << SEPARATOR;
 
 

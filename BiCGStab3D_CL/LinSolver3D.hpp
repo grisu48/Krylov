@@ -26,7 +26,6 @@ public:
 		this->rank = 0;
 	}
 	virtual ~Linsolver3D() {
-
 	}
 
 	/**
