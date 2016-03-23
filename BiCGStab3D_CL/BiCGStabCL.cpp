@@ -812,18 +812,15 @@ bool BiCGStabSolver::checkMatrix(flexCL::CLMatrix3d *matrix) {
 long BiCGStabSolver::iterations(void) { return this->_iterations; }
 long BiCGStabSolver::steptimeMin(void) { return this->_steptime_min; }
 long BiCGStabSolver::steptimeMax(void) { return this->_steptime_max; }
-std::vector<long> BiCGStabSolver::stepRuntimes(void) {
-	// Copy vector to make sure the user does not do any nastry stuff
-	vector<long> result(this->stepTimes);
-	return result;
-}
 
-void BiCGStabSolver::stepRuntimes(std::vector<long> &vector) {
+std::vector<long> BiCGStabSolver::stepRuntimes(void) {
 	const int size = this->stepTimes.size();
+	std::vector<long> vector;
 	for(int i=0;i<size;i++) {
 		const long value = this->stepTimes[i];
 		vector.push_back(value);
 	}
+	return vector;
 }
 
 void BiCGStabSolver::calculateResidual(flexCL::CLMatrix3d* residual, flexCL::CLMatrix3d* phi, flexCL::CLMatrix3d* rhs, flexCL::CLMatrix3d* lambda, flexCL::CLMatrix3d* Dxx, flexCL::CLMatrix3d* Dyy, flexCL::CLMatrix3d* Dzz, flexCL::CLMatrix3d* Dxy) {
@@ -1054,19 +1051,21 @@ void BiCGStabSolver::solve_int(BoundaryHandler3D &bounds,
 				throw NumException("Maximum iterations reached");
 
 			iterations++;
+			if(iterations > 1) {
+				runtime += time_ms();
+				this->stepTimes.push_back(runtime);
+				if(initialStep) {
+					initialStep = false;
+					this->_steptime_min = runtime;
+					this->_steptime_max = runtime;
+				} else {
+					if(runtime > this->_steptime_max) this->_steptime_max = runtime;
+					if(runtime < this->_steptime_min) this->_steptime_min = runtime;
+				}
+			}
 			if(this->verbose) {
 				if(iterations > 1) {
-					runtime += time_ms();
-					this->stepTimes.push_back(runtime);
 					cout << "Starting iteration " << iterations << " ... (" << runtime << " ms)" << endl;
-					if(initialStep) {
-						initialStep = false;
-						this->_steptime_min = runtime;
-						this->_steptime_max = runtime;
-					} else {
-						if(runtime > this->_steptime_max) this->_steptime_max = runtime;
-						if(runtime < this->_steptime_min) this->_steptime_min = runtime;
-					}
 				} else
 					cout << "Starting iteration " << iterations << " ... " << endl;
 			}

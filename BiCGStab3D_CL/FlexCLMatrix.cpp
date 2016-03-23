@@ -33,7 +33,7 @@
 
 // Deep reduction (Reduction until only one element remains)
 #ifndef _FLEXCL_REDUCTION_DEEP_
-#define _FLEXCL_REDUCTION_DEEP_ 1
+#define _FLEXCL_REDUCTION_DEEP_ 0
 #endif
 
 /* ==== STATIC CONFIGURATION ==== */

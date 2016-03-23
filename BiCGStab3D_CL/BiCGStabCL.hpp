@@ -137,12 +137,10 @@ public:
 	void setVerbose(bool);
 	long iterations(void);
 
-	/** Get the iteration runtimes of all steps */
-	std::vector<long> stepRuntimes(void);
 	/** Get the iteration runtimes of all steps
 	 * @param vector vector where the runtimes are written to
 	 * */
-	void stepRuntimes(std::vector<long> &vector);
+	std::vector<long> stepRuntimes(void);
 
 
 	/**
