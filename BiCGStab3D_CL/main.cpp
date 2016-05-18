@@ -303,7 +303,6 @@ int main(int argc, char** argv) {
 							diffTens[0](ix,iy,iz) = diffTensFactor[0] * yVal;
 							diffTens[1](ix,iy,iz) = diffTensFactor[1] * xVal;
 							diffTens[2](ix,iy,iz) = diffTensFactor[2] * zVal;
-							// DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
 							diffTens[3](ix,iy,iz) = diffTensFactor[3] * AVal*sqr(xVal)*yVal*zVal;
 							const double D_xy = diffTens[3](ix,iy,iz);
 							rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz) +
@@ -317,8 +316,9 @@ int main(int argc, char** argv) {
 						{
 							phi_exact(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 							const double angle = atan2(yVal, xVal);
+
 							diffTens[0](ix,iy,iz) = diffTensFactor[0] * (dPar*sqr(sin(angle)) + dPerp*sqr(cos(angle)));
-							diffTens[1](ix,iy,iz) = diffTensFactor[1] * (dPar*sqr(cos(angle)) + dPerp*sqr(sin(angle)));
+							diffTens[1](ix,iy,iz) = diffTensFactor[1] * (dPar*sqr(cos(angle)) +dPerp*sqr(sin(angle)));
 							diffTens[2](ix,iy,iz) = diffTensFactor[2] * dPerp;
 							diffTens[3](ix,iy,iz) = diffTensFactor[3] * (dPerp - dPar)*sin(angle)*cos(angle);
 
@@ -357,8 +357,7 @@ int main(int argc, char** argv) {
 
 							rhs(ix,iy,iz) = -(sqr(pi)*(1. + 0.00000001*xVal + 1. + 1.) +
 									lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
-							rhs(ix,iy,iz) = -(sqr(pi)*(1. + 1. + 1.) +
-									lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
+							//rhs(ix,iy,iz) = -(sqr(pi)*(1. + 1. + 1.) + lambda(ix,iy,iz))*phi_exact(ix,iy,iz);
 						}
 						break;
 

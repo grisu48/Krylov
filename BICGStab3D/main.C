@@ -44,6 +44,16 @@ static void printMat(NumMatrix<double, 3> &mat, ostream &out = cout) {
 	}
 }
 
+static double randomf(double min, double max) {
+	const double diff = max-min;
+	return min + (double)rand()/(double)(RAND_MAX/diff);
+}
+
+
+
+
+
+
 int main(int argc, char *argv[]) {
 #ifdef parallel
 	int ntasks;
@@ -54,6 +64,7 @@ int main(int argc, char *argv[]) {
 #else
 	int rank = 0;
 #endif
+	bool randomize = false;
 
 	// choice of test to be run
 	int switch_test(1);
@@ -76,6 +87,7 @@ int main(int argc, char *argv[]) {
 				cout << "    -n   --size MX                " << endl;
 				cout << "         --mx   MX                Define problem size" << endl;
 				cout << "    -t   --test TEST              Define test case (1-5)" << endl;
+				cout << "    -r   --randomize              Randomize input" << endl;
 				return EXIT_SUCCESS;
 			} else if(arg == "-n" || arg == "--size" || arg == "--mx") {
 				if(i >= argc-1) {
@@ -84,6 +96,8 @@ int main(int argc, char *argv[]) {
 				}
 
 				problem_mx = (size_t)atol(argv[++i]);
+			} else if(arg == "-r" || arg == "--randomize") {
+				randomize = true;
 			} else if(arg == "-t" || arg == "--test") {
 				if(i >= argc-1) {
 					cerr << "Missing argument: Test" << endl;
@@ -200,6 +214,8 @@ int main(int argc, char *argv[]) {
 	double dz = MyGrid.get_delx(2);
 
 	double pi = M_PI;
+	double lambda_factor;
+	double diffTensFactor[4];
 
 	phi.clear();
 	rhs.clear();
@@ -216,6 +232,17 @@ int main(int argc, char *argv[]) {
 	DiffTens[1].set_constVal(1.);
 	DiffTens[2].set_constVal(1.);
 	DiffTens[3].clear();
+
+
+	if(randomize) {
+		lambda_factor = randomf(0.1, 100.0);
+		for(int i=0;i<4;i++){
+			diffTensFactor[i] = randomf(0.1,10.0);
+		}
+	} else {
+		lambda_factor = 0.2;
+		for(int i=0;i<4;i++) diffTensFactor[i] = 1.0;
+	}
 
 
 	double DPar = 1.;
@@ -247,7 +274,7 @@ int main(int argc, char *argv[]) {
 				// phi_ana(ix,iy,iz) = sin(2.*pi*xVal)*sin(2.*pi*yVal)*
 				// 	sin(2.*pi*zVal);
 				phi_ana(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
-				lambda(ix,iy,iz) = 0.2*xVal*sqr(yVal)*zVal;
+				lambda(ix,iy,iz) = lambda_factor*xVal*sqr(yVal)*zVal;
 //				lambda(ix,iy,iz) = xVal;
 
 				// rhs(ix,iy,iz) = -4*sqr(pi)*(Diff(0) + Diff(1) + Diff(2))*
@@ -278,13 +305,10 @@ int main(int argc, char *argv[]) {
 				// Test 2 (räumliche Diffusion)
 					phi_ana(ix,iy,iz) = sin(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 
-					DiffTens[0](ix,iy,iz) = yVal;
-					DiffTens[1](ix,iy,iz) = xVal;
-					DiffTens[2](ix,iy,iz) = zVal;
-
-					rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) +
-					                  lambda(ix,iy,iz))*phi_ana(ix,iy,iz) +
-						pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal);
+					DiffTens[0](ix,iy,iz) = diffTensFactor[0] * yVal;
+					DiffTens[1](ix,iy,iz) = diffTensFactor[1] * xVal;
+					DiffTens[2](ix,iy,iz) = diffTensFactor[2] * zVal;
+					rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_ana(ix,iy,iz) + pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal);
 
 				} else if (switch_test==-1) {
 				// if(ix==mx[0]/2 && iy==mx[1]/2 && iz==mx[2]/2) {
@@ -304,6 +328,8 @@ int main(int argc, char *argv[]) {
 					DiffTens[2](ix,iy,iz) = 1.;
 					DiffTens[3](ix,iy,iz) = 0.;
 
+					for(int i=0;i<4;i++) DiffTens[i] *= diffTensFactor[i];
+
 					rhs(ix,iy,iz) = -(sqr(pi)*(1. + 0.00000001*xVal + 1. + 1.) +
 					                  lambda(ix,iy,iz))*phi_ana(ix,iy,iz);
 					rhs(ix,iy,iz) = -(sqr(pi)*(1. + 1. + 1.) +
@@ -319,20 +345,16 @@ int main(int argc, char *argv[]) {
 					// Test 3 (räumliche Diffusion mit D_xy)
 
 					double AVal = 0.1;//1.8;
-
-					DiffTens[0](ix,iy,iz) = yVal;
-					DiffTens[1](ix,iy,iz) = xVal;
-					DiffTens[2](ix,iy,iz) = zVal;
-					// DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
-					DiffTens[3](ix,iy,iz) = AVal*sqr(xVal)*yVal*zVal;
-					double D_xy = DiffTens[3](ix,iy,iz);
-
-					rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) +
-					                  lambda(ix,iy,iz))*phi_ana(ix,iy,iz) +
-						pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal) +
-						2.*D_xy*sqr(pi)*cos(pi*xVal)*cos(pi*yVal)*sin(pi*zVal)+
-						2.*AVal*xVal*yVal*zVal*pi*sin(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) +
-						AVal*sqr(xVal)*zVal*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
+					DiffTens[0](ix,iy,iz) = diffTensFactor[0] * yVal;
+					DiffTens[1](ix,iy,iz) = diffTensFactor[1] * xVal;
+					DiffTens[2](ix,iy,iz) = diffTensFactor[2] * zVal;
+					DiffTens[3](ix,iy,iz) = diffTensFactor[3] * AVal*sqr(xVal)*yVal*zVal;
+					const double D_xy = DiffTens[3](ix,iy,iz);
+					rhs(ix,iy,iz) = -(sqr(pi)*(xVal + yVal + zVal) + lambda(ix,iy,iz))*phi_ana(ix,iy,iz) +
+							pi*sin(pi*xVal)*sin(pi*yVal)*cos(pi*zVal) +
+							2.*D_xy*sqr(pi)*cos(pi*xVal)*cos(pi*yVal)*sin(pi*zVal)+
+							2.*AVal*xVal*yVal*zVal*pi*sin(pi*xVal)*cos(pi*yVal)*sin(pi*zVal) +
+							AVal*sqr(xVal)*zVal*pi*cos(pi*xVal)*sin(pi*yVal)*sin(pi*zVal);
 
 
 				} else if (switch_test==4) {
@@ -342,12 +364,10 @@ int main(int argc, char *argv[]) {
 
 					double angle = atan2(yVal, xVal);
 
-					DiffTens[0](ix,iy,iz) = (DPar*sqr(sin(angle)) +
-					                         DPerp*sqr(cos(angle)));
-					DiffTens[1](ix,iy,iz) = (DPar*sqr(cos(angle)) +
-					                         DPerp*sqr(sin(angle)));
-					DiffTens[2](ix,iy,iz) = DPerp;
-					DiffTens[3](ix,iy,iz) = (DPerp - DPar)*sin(angle)*cos(angle);
+					DiffTens[0](ix,iy,iz) = diffTensFactor[0] * (DPar*sqr(sin(angle)) + DPerp*sqr(cos(angle)));
+					DiffTens[1](ix,iy,iz) = diffTensFactor[1] * (DPar*sqr(cos(angle)) + DPerp*sqr(sin(angle)));
+					DiffTens[2](ix,iy,iz) = diffTensFactor[2] * DPerp;
+					DiffTens[3](ix,iy,iz) = diffTensFactor[3] * (DPerp - DPar)*sin(angle)*cos(angle);
 
 					double Dxx = DiffTens[0](ix,iy,iz);
 					double Dyy = DiffTens[1](ix,iy,iz);
@@ -466,6 +486,11 @@ int main(int argc, char *argv[]) {
 	NumMatrix<double,3> & Dyy = DiffTens[1];
 	NumMatrix<double,3> & Dzz = DiffTens[2];
 	NumMatrix<double,3> & Dxy = DiffTens[3];
+
+	Dxx *= diffTensFactor[0];
+	Dyy *= diffTensFactor[1];
+	Dzz *= diffTensFactor[2];
+	Dxy *= diffTensFactor[3];
 
 	double coeff[3];
 	coeff[0] = 1./sqr(dx);
