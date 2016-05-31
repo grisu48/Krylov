@@ -116,6 +116,13 @@ int main(int argc, char** argv) {
 	double mutliplication_time[2];
 	double dot_product_itself_time[2];
 	double dot_product_foreign_time[2];
+	
+	// CPU reference times
+	double cpu_addition_time = 0.0;
+	double cpu_subtraction_time = 0.0;
+	double cpu_mutliplication_time = 0.0;
+	double cpu_dot_product_itself_time = 0.0;
+	double cpu_dot_product_foreign_time = 0.0;
 
 
 	srand(time(NULL));
@@ -208,6 +215,9 @@ int main(int argc, char** argv) {
 
 	CLMatrix3d *m1;
 	CLMatrix3d *m2;
+	Matrix3d cpu_m1(size,size,size, rim, "matrix");
+	Matrix3d cpu_m2(size,size,size, rim, "matrix");
+	
 	try {
 		time = -time_ms();
 		m1 = matrix.transferToDevice(context);
@@ -247,11 +257,26 @@ int main(int argc, char** argv) {
 	}
 	context->join();
 	time += time_ms();
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	addition_time[0] = runtime / 1e6;
 	addition_time[1] = time;
+	
+	cpu_m1.copyFrom(matrix);
+	cpu_m2.copyFrom(matrix);
+	time = -time_ms();
+	if(verbose) { cout << "Addition (CPU reference) ... "; cout.flush(); }
+	for(long i=0;i<iterations;i++) {
+		cpu_m1.add(cpu_m2);
+	}
+	time += time_ms();
+	cpu_addition_time = time;
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
+	
+	// Subtraction
 	m1->transferToDevice(matrix, true);
 	m2->transferToDevice(matrix, true);
-	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
+	cpu_m1.copyFrom(matrix);
+	cpu_m2.copyFrom(matrix);
 	// Subtraction
 	if(verbose) { cout << "Subtraction ... "; cout.flush(); }
 	context->join();
@@ -263,12 +288,24 @@ int main(int argc, char** argv) {
 	}
 	context->join();
 	time += time_ms();
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	subtraction_time[0] = runtime / 1e6;
 	subtraction_time[1] = time;
+	if(verbose) { cout << "Subtraction (CPU reference) ... "; cout.flush(); }
+	time = -time_ms();
+	for(long i=0;i<iterations;i++) {
+		cpu_m1.sub(cpu_m2);
+	}
+	time += time_ms();
+	cpu_subtraction_time = time;
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
+	
+	
+	// Multiplication
 	m1->transferToDevice(matrix, true);
 	m2->transferToDevice(matrix, true);
-	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
-	// Multiplication
+	cpu_m1.copyFrom(matrix);
+	cpu_m2.copyFrom(matrix);
 	if(verbose) { cout << "Multiplication ... "; cout.flush(); }
 	context->join();
 	time = -time_ms();
@@ -279,13 +316,25 @@ int main(int argc, char** argv) {
 	}
 	context->join();
 	time += time_ms();
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	mutliplication_time[0] = runtime / 1e6;
 	mutliplication_time[1] = time;
-	m1->transferToDevice(matrix, true);
-	m2->transferToDevice(matrix, true);
+	if(verbose) { cout << "Multiplication (CPU reference) ... "; cout.flush(); }
+	time = -time_ms();
+	for(long i=0;i<iterations;i++) {
+		cpu_m1.mul(cpu_m2);
+	}
+	time += time_ms();
+	cpu_mutliplication_time = time;
 	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	
+	
+	
 	// Dot products
+	m1->transferToDevice(matrix, true);
+	m2->transferToDevice(matrix, true);
+	cpu_m1.copyFrom(matrix);
+	cpu_m2.copyFrom(matrix);
 	if(verbose) { cout << "Dot-Product (itself) ... "; cout.flush(); }
 	context->join();
 	time = -time_ms();
@@ -297,13 +346,24 @@ int main(int argc, char** argv) {
 	}
 	context->join();
 	time += time_ms();
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	dot_product_itself_time[0] = runtime / 1e6;
 	dot_product_itself_time[1] = time;
-	m1->transferToDevice(matrix, true);
-	m2->transferToDevice(matrix, true);
+	if(verbose) { cout << "Dot-Product (itself; CPU reference) ... "; cout.flush(); }
+	time = -time_ms();
+	for(long i=0;i<iterations;i++) {
+		cpu_m1.dotProduct();
+	}
+	time += time_ms();
+	cpu_dot_product_itself_time = time;
 	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	
 	
+	
+	m1->transferToDevice(matrix, true);
+	m2->transferToDevice(matrix, true);
+	cpu_m1.copyFrom(matrix);
+	cpu_m2.copyFrom(matrix);
 	if(verbose) { cout << "Dot-Product (foreign) ... "; cout.flush(); }
 	time = -time_ms();
 	runtime = 0L;
@@ -313,36 +373,45 @@ int main(int argc, char** argv) {
 	}
 	context->join();
 	time += time_ms();
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	dot_product_foreign_time[0] = runtime / 1e6;
 	dot_product_foreign_time[1] = time;
+	if(verbose) { cout << "Dot-Product (foreign; CPU reference) ... "; cout.flush(); }
+	time = -time_ms();
+	for(long i=0;i<iterations;i++) {
+		cpu_m1.dotProduct(cpu_m2);
+	}
+	time += time_ms();
+	cpu_dot_product_foreign_time = time;
+	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 	m1->transferToDevice(matrix, true);
 	m2->transferToDevice(matrix, true);
-	if(verbose) { cout << time << " ms" << endl; cout.flush(); }
 
 
 	cout << SEPARATOR;
 	cout << "  --------RESULTS--------" << endl;
 	cout << "  The result are in ms per iteration" << endl;
-	cout << "                          :   PROFILE  | WALL CLOCK " << endl;
+	cout << "                          :   PROFILE  | WALL CLOCK |  CPU REF   | FACTOR" << endl;
 	double index[2];
 	index[0] = 0.0;
 	index[1] = ((double)transfer_time / (double)(size*size*size))*1e5;
 	cout << "    Transfer time         : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
 	index[0] = (double)addition_time[0]/(double)iterations;
 	index[1] = (double)addition_time[1]/(double)iterations;
-	cout << "    Addition              : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
+	cout << "    Addition              : " << setw(10) << index[0] << " | " << setw(10) << index[1] << " | " << setw(10) << cpu_addition_time / (double)iterations << " | " << addition_time[0]/cpu_addition_time << endl;
 	index[0] = (double)subtraction_time[0]/(double)iterations;
 	index[1] = (double)subtraction_time[1]/(double)iterations;
-	cout << "    Subtraction           : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
+	cout << "    Subtraction           : " << setw(10) << index[0] << " | " << setw(10) << index[1] << " | " << setw(10) << cpu_subtraction_time / (double)iterations << " | " << subtraction_time[0]/cpu_subtraction_time << endl;
 	index[0] = (double)mutliplication_time[0]/(double)iterations;
 	index[1] = (double)mutliplication_time[1]/(double)iterations;
-	cout << "    Multiplication        : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
+	cout << "    Multiplication        : " << setw(10) << index[0] << " | " << setw(10) << index[1] << " | " << setw(10) << cpu_mutliplication_time / (double)iterations << " | " << mutliplication_time[0]/cpu_mutliplication_time << endl;
 	index[0] = (double)dot_product_itself_time[0]/(double)iterations;
 	index[1] = (double)dot_product_itself_time[1]/(double)iterations;
-	cout << "    dotProduct (itself)   : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
+	cout << "    dotProduct (itself)   : " << setw(10) << index[0] << " | " << setw(10) << index[1] << " | " << setw(10) << cpu_dot_product_itself_time / (double)iterations << " | " << dot_product_itself_time[0]/cpu_dot_product_itself_time << endl;
 	index[0] = (double)dot_product_foreign_time[0]/(double)iterations;
 	index[1] = (double)dot_product_foreign_time[1]/(double)iterations;
-	cout << "    dotProduct (foreign)  : " << setw(10) << index[0] << " | " << setw(10) << index[1] << endl;
+	cout << "    dotProduct (foreign)  : " << setw(10) << index[0] << " | " << setw(10) << index[1] << " | " << setw(10) << cpu_dot_product_foreign_time / (double)iterations << " | " << dot_product_foreign_time[0]/cpu_dot_product_foreign_time << endl;
+	cout << "    FACTOR: The FACTOR is the Profile time / CPU ref time" << endl;
 	cout << SEPARATOR;
 
 
